@@ -1,0 +1,376 @@
+<title>Company Control Room</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+tailwind.config = { theme: { extend: {
+  colors: { bg:'var(--bg)', surface:'var(--surface)', raise:'var(--raise)', fg:'var(--fg)', mute:'var(--mute)', line:'var(--line)', accent:'var(--accent)', soft:'var(--soft)' },
+  fontFamily: { display:['Bricolage Grotesque','Instrument Sans','system-ui','sans-serif'], sans:['Instrument Sans','system-ui','sans-serif'], mono:['IBM Plex Mono','ui-monospace','monospace'] }
+} } };
+</script>
+<style>
+/* Layout: one phone-width column, sticky header, bottom tab bar. Admin tabs + a customer-facing Shop preview. */
+:root{
+  --bg:#f1f4f1; --surface:#ffffff; --raise:#e8ede9; --fg:#14211d; --mute:#566761; --line:#d6ddd8;
+  --accent:#0b7a63; --accent-fg:#ffffff; --soft:#d8eee7;
+  --good:#1d7439; --goodbg:#dcf0e1; --warn:#8f5400; --warnbg:#fbebc9; --bad:#b0231a; --badbg:#fbe0dc; --mutebg:#e3e8e5;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0d1512; --surface:#16201c; --raise:#1f2b26; --fg:#e8efeb; --mute:#94a69f; --line:#2a3832;
+  --accent:#4ccaa5; --accent-fg:#06241b; --soft:#173a2f;
+  --good:#66d08a; --goodbg:#163220; --warn:#f0b34a; --warnbg:#3a2b0c; --bad:#ff8f80; --badbg:#3e1b17; --mutebg:#24312b; color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#0d1512; --surface:#16201c; --raise:#1f2b26; --fg:#e8efeb; --mute:#94a69f; --line:#2a3832;
+  --accent:#4ccaa5; --accent-fg:#06241b; --soft:#173a2f;
+  --good:#66d08a; --goodbg:#163220; --warn:#f0b34a; --warnbg:#3a2b0c; --bad:#ff8f80; --badbg:#3e1b17; --mutebg:#24312b; color-scheme:dark; }
+
+html,body{height:auto}
+body{background:var(--bg);color:var(--fg);font-family:'Instrument Sans',system-ui,sans-serif;font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 96px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
+.col{max-width:640px;margin-inline:auto}
+.num{font-variant-numeric:tabular-nums;font-family:'IBM Plex Mono',ui-monospace,monospace;letter-spacing:-.01em}
+h1,h2,h3,.disp{font-family:'Bricolage Grotesque','Instrument Sans',sans-serif;text-wrap:balance}
+.label{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--mute);font-weight:600}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);padding-block:12px;border-bottom:1px solid var(--line)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.card-flat{background:var(--raise);border-radius:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-weight:600;font-size:13px;cursor:pointer}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn-lg{min-height:48px;font-size:15px;width:100%}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer;color:var(--fg)}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-good{background:var(--goodbg);color:var(--good)} .p-warn{background:var(--warnbg);color:var(--warn)}
+.p-bad{background:var(--badbg);color:var(--bad)} .p-mute{background:var(--mutebg);color:var(--mute)}
+.bar{height:8px;border-radius:99px;background:var(--raise);overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent);border-radius:99px}
+input[type=text],input[type=number]{width:100%;min-height:42px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit}
+.switch{width:44px;height:26px;border-radius:99px;background:var(--line);position:relative;border:0;cursor:pointer;flex:none}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--surface);transition:transform .15s}
+.switch[aria-checked="true"]{background:var(--accent)} .switch[aria-checked="true"]::after{transform:translateX(18px)}
+.scroll-x{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none} .scroll-x::-webkit-scrollbar{display:none}
+.opt{border:1.5px solid var(--line);border-radius:12px;background:var(--surface);padding:12px;text-align:left;cursor:pointer;color:var(--fg)}
+.opt[aria-pressed="true"]{border-color:var(--accent);background:var(--soft)}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-top:1px solid var(--line);
+  padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+nav.tabs .in{max-width:640px;margin-inline:auto;display:grid;grid-template-columns:repeat(5,1fr);gap:2px}
+.tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;border:0;background:none;color:var(--mute);font-size:11px;font-weight:600;border-radius:10px;cursor:pointer}
+.tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tab[aria-current="page"]{color:var(--accent);background:var(--soft)}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:13px;font-weight:500;max-width:calc(100vw - 32px);text-align:center}
+.stripe-warn{box-shadow:inset 3px 0 0 var(--warn)} .stripe-bad{box-shadow:inset 3px 0 0 var(--bad)}
+.col-bar{width:100%;border-radius:4px 4px 0 0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top"><div class="col flex items-center justify-between gap-3">
+  <div class="min-w-0">
+    <div class="label">Demo data</div>
+    <h1 id="ttl" class="text-xl font-bold leading-tight">Control Room</h1>
+  </div>
+  <button id="theme" class="btn" aria-label="Switch light or dark theme">Theme</button>
+</div></header>
+
+<main id="app" class="col pt-4 flex flex-col gap-5"></main>
+<div id="toast" hidden></div>
+
+<nav class="tabs" aria-label="Sections"><div class="in" id="tabs"></div></nav>
+
+<script>
+(function(){
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today = new Date(); today.setHours(0,0,0,0);
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+function addMonths(d,n){const x=new Date(d),day=x.getDate();x.setDate(1);x.setMonth(x.getMonth()+n);
+  x.setDate(Math.min(day,new Date(x.getFullYear(),x.getMonth()+1,0).getDate()));return x}
+const inr = n => '₹' + Math.round(n).toLocaleString('en-IN');
+const fmt = d => d.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+const dayDiff = (a,b) => Math.round((b-a)/864e5);
+const endFor = (start,months) => addMonths(start,months);
+const startFor = (months,daysLeft) => addMonths(addDays(today,daysLeft),-months);
+
+const S = {
+  view:'home', filter:'all', open:null, stage:'all',
+  disc:{1:0,3:5,12:15,48:30},
+  products:[
+    {id:'inv',name:'StockPilot',kind:'Inventory management',listed:true,extra:120,plans:[
+      {id:'basic',name:'Basic',users:5,price:599},{id:'std',name:'Standard',users:30,price:1999},{id:'biz',name:'Business',users:100,price:4999}]},
+    {id:'crm',name:'LeadLoop',kind:'CRM software',listed:true,extra:150,plans:[
+      {id:'basic',name:'Basic',users:5,price:799},{id:'std',name:'Standard',users:30,price:2499},{id:'biz',name:'Business',users:100,price:5999}]}
+  ],
+  subs:[],
+  services:[
+    {id:'s1',cat:'Graphic design',name:'Logo and brand kit',note:'3 concepts, 5 days',price:4999,listed:true},
+    {id:'s2',cat:'Graphic design',name:'Social post pack (10)',note:'Branded templates, 3 days',price:2499,listed:true},
+    {id:'s3',cat:'Video editing',name:'Video edit up to 5 min',note:'Cuts, captions, colour',price:3500,listed:true},
+    {id:'s4',cat:'Video editing',name:'Reel or short edit',note:'Per reel, 1 day',price:1200,listed:true},
+    {id:'s5',cat:'Motion graphics',name:'Animated logo intro',note:'10 seconds, 4 days',price:6000,listed:true}
+  ],
+  orders:[
+    {id:'o1',client:'Sharma Traders',sid:'s1',stage:1,paid:false,due:3},
+    {id:'o2',client:'Blue Orchid Salon',sid:'s4',stage:2,paid:true,due:1},
+    {id:'o3',client:'Kaveri Pharma',sid:'s5',stage:0,paid:false,due:9},
+    {id:'o4',client:'Urban Cart',sid:'s2',stage:3,paid:false,due:-2}
+  ],
+  shop:{p:'inv',plan:'basic',users:5,months:12,biz:'Demo Traders'}
+};
+const STAGES = ['Brief','In progress','Review','Delivered'];
+const prod = id => S.products.find(p=>p.id===id);
+const svc = id => S.services.find(s=>s.id===id);
+
+function quote(p,planId,users,months){
+  const pl=p.plans.find(x=>x.id===planId), extra=Math.max(0,users-pl.users);
+  const monthly=pl.price+extra*p.extra, gross=monthly*months, d=S.disc[months]||0, total=gross*(1-d/100);
+  return {pl,extra,monthly,gross,d,total,saved:gross-total};
+}
+[
+ ['Sharma Traders','inv','basic',7,7,12,12,true],
+ ['Kaveri Pharma','inv','std',18,14,48,1180,true],
+ ['Urban Cart','crm','std',24,22,12,201,true],
+ ['Metro Hardware','inv','basic',5,4,1,6,true],
+ ['Blue Orchid Salon','crm','basic',3,3,3,-4,true],
+ ['Nova Logistics','crm','biz',62,48,12,88,false]
+].forEach((r,i)=>S.subs.push({id:'c'+i,client:r[0],p:r[1],plan:r[2],users:r[3],used:r[4],months:r[5],start:startFor(r[5],r[6]),paid:r[7],suspended:false}));
+
+function info(s){
+  const p=prod(s.p), end=endFor(s.start,s.months), left=dayDiff(today,end), q=quote(p,s.plan,s.users,s.months);
+  let st='Active',tone='good';
+  if(s.suspended){st='Suspended';tone='mute'}
+  else if(left<0){st='Expired';tone='bad'}
+  else if(!s.paid){st='Payment due';tone='bad'}
+  else if(left<=30){st='Expiring';tone='warn'}
+  return {p,end,left,q,st,tone};
+}
+const pillHtml=(st,tone)=>`<span class="pill p-${tone}">${st}</span>`;
+const leftTxt=l=>l>=0?(l===0?'Ends today':`${l} day${l===1?'':'s'} left`):`Expired ${-l} day${l===-1?'':'s'} ago`;
+
+function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,2600)}
+
+/* ---------- views ---------- */
+function viewHome(){
+  const infos=S.subs.map(s=>({s,i:info(s)}));
+  const live=infos.filter(x=>['Active','Expiring'].includes(x.i.st));
+  const mrr=live.reduce((a,x)=>a+x.i.q.total/x.s.months,0);
+  const soon=infos.filter(x=>x.i.st==='Expiring').length;
+  const unpaidOrders=S.orders.filter(o=>!o.paid);
+  const owed=unpaidOrders.reduce((a,o)=>a+svc(o.sid).price,0)+infos.filter(x=>x.i.st==='Payment due').reduce((a,x)=>a+x.i.q.total,0);
+  const attention=[
+    ...infos.filter(x=>['Expired','Payment due','Expiring'].includes(x.i.st)).sort((a,b)=>a.i.left-b.i.left).map(x=>({
+      tone:x.i.tone,title:x.s.client,sub:`${x.i.p.name} ${x.i.q.pl.name} · ${x.i.st==='Payment due'?'Unpaid, ends '+fmt(x.i.end):leftTxt(x.i.left)}`,pill:x.i.st,go:['subs',x.s.id]})),
+    ...unpaidOrders.map(o=>({tone:'warn',title:o.client,sub:`${svc(o.sid).name} · ${inr(svc(o.sid).price)} not paid`,pill:'Unpaid',go:['services',o.id]}))
+  ];
+  const mo=[...Array(6)].map((_,i)=>addMonths(today,i-5).toLocaleDateString('en-IN',{month:'short'}));
+  const pr=[38,44,47,55,61,68], sv=[22,18,31,26,35,29], max=Math.max(...pr.map((v,i)=>v+sv[i]));
+  const chart=mo.map((m,i)=>`<div class="flex flex-col items-center justify-end gap-1 flex-1 min-w-0">
+    <span class="num text-[11px] text-mute">${pr[i]+sv[i]}k</span>
+    <div class="w-full flex flex-col justify-end" style="height:96px">
+      <div class="col-bar" style="height:${sv[i]/max*96}px;background:var(--warn)"></div>
+      <div class="col-bar" style="height:${pr[i]/max*96}px;background:var(--accent);border-radius:0"></div></div>
+    <span class="text-[11px] text-mute">${m}</span></div>`).join('');
+  return `
+  <section class="flex flex-col gap-1">
+    <div class="label">${today.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</div>
+    <h2 class="text-2xl font-bold">${attention.length} thing${attention.length===1?'':'s'} need you today</h2>
+  </section>
+  <section class="grid grid-cols-2 gap-3">
+    <div class="card p-4"><div class="label">Monthly recurring</div><div class="num text-2xl mt-1">${inr(mrr)}</div><div class="text-xs text-mute mt-1">from ${live.length} live subscriptions</div></div>
+    <div class="card p-4"><div class="label">Expiring in 30 days</div><div class="num text-2xl mt-1">${soon}</div><div class="text-xs text-mute mt-1">renewal reminders going out</div></div>
+    <div class="card p-4"><div class="label">Not yet paid</div><div class="num text-2xl mt-1">${inr(owed)}</div><div class="text-xs text-mute mt-1">plans and service invoices</div></div>
+    <div class="card p-4"><div class="label">Open creative jobs</div><div class="num text-2xl mt-1">${S.orders.filter(o=>o.stage<3).length}</div><div class="text-xs text-mute mt-1">design, video, motion</div></div>
+  </section>
+  <section class="flex flex-col gap-2">
+    <h3 class="text-lg font-bold">Needs attention</h3>
+    ${attention.map(a=>`<button class="card p-3 text-left flex items-center justify-between gap-3 stripe-${a.tone==='bad'?'bad':'warn'}" data-a="go" data-v="${a.go[0]}" data-id="${a.go[1]}">
+      <span class="min-w-0"><span class="block font-semibold truncate">${esc(a.title)}</span><span class="block text-[13px] text-mute">${esc(a.sub)}</span></span>
+      <span class="pill p-${a.tone}">${a.pill}</span></button>`).join('')||'<div class="card p-4 text-mute">Nothing pending.</div>'}
+  </section>
+  <section class="card p-4">
+    <div class="flex items-baseline justify-between"><h3 class="text-lg font-bold">Revenue, last 6 months</h3><span class="text-xs text-mute">sample, ₹ thousand</span></div>
+    <div class="flex gap-2 mt-3">${chart}</div>
+    <div class="flex gap-4 mt-3 text-xs text-mute"><span class="flex items-center gap-1.5"><i style="width:10px;height:10px;background:var(--accent);display:inline-block;border-radius:2px"></i>Software subscriptions</span><span class="flex items-center gap-1.5"><i style="width:10px;height:10px;background:var(--warn);display:inline-block;border-radius:2px"></i>Creative services</span></div>
+  </section>
+  <section class="card p-4 flex flex-col gap-3">
+    <h3 class="text-lg font-bold">How a subscription runs</h3>
+    ${[['Customer picks a product, plan, extra users and duration in your shop.','Price and end date show before paying.'],
+       ['They pay. The system issues a licence with the seat limit and an end date.','End date = start date plus the months bought.'],
+       ['Reminders go out 30, 7 and 1 day before the end date.','Overdue payments show up here in red.'],
+       ['On the end date the licence locks. Renewing adds months from the old end date.','Adding a seat mid-term updates the limit at once.']]
+      .map((s,i)=>`<div class="flex gap-3"><span class="num w-6 h-6 rounded-full flex-none flex items-center justify-center text-xs" style="background:var(--soft);color:var(--accent)">${i+1}</span><p class="text-sm"><b class="font-semibold">${s[0]}</b> <span class="text-mute">${s[1]}</span></p></div>`).join('')}
+  </section>`;
+}
+
+function viewSubs(){
+  const all=S.subs.map(s=>({s,i:info(s)}));
+  const flt={all:()=>true,active:x=>x.i.st==='Active',expiring:x=>x.i.st==='Expiring',issue:x=>['Payment due','Expired','Suspended'].includes(x.i.st)};
+  const chips=[['all','All'],['active','Active'],['expiring','Expiring'],['issue','Needs action']]
+    .map(([k,l])=>`<button class="chip" data-a="filter" data-f="${k}" aria-pressed="${S.filter===k}">${l} <span class="num text-xs opacity-70">${all.filter(flt[k]).length}</span></button>`).join('');
+  const cards=all.filter(flt[S.filter]).map(({s,i})=>{
+    const open=S.open===s.id, pct=Math.min(100,s.used/s.users*100);
+    return `<article class="card ${i.tone==='bad'?'stripe-bad':i.tone==='warn'?'stripe-warn':''}">
+      <button class="w-full text-left p-3 flex items-center justify-between gap-3" data-a="open" data-id="${s.id}" aria-expanded="${open}">
+        <span class="min-w-0"><span class="block font-semibold truncate">${esc(s.client)}</span>
+        <span class="block text-[13px] text-mute">${i.p.name} ${i.q.pl.name} · ${s.used}/${s.users} users</span></span>
+        <span class="text-right flex flex-col items-end gap-1">${pillHtml(i.st,i.tone)}<span class="num text-xs text-mute">${fmt(i.end)}</span></span></button>
+      ${open?`<div class="px-3 pb-3 flex flex-col gap-3 border-t" style="border-color:var(--line)">
+        <div class="grid grid-cols-2 gap-3 pt-3 text-sm">
+          <div><div class="label">Started</div><div class="num">${fmt(s.start)}</div></div>
+          <div><div class="label">Ends</div><div class="num">${fmt(i.end)}</div></div>
+          <div><div class="label">Term</div><div class="num">${s.months} month${s.months>1?'s':''}</div></div>
+          <div><div class="label">Time left</div><div class="num">${leftTxt(i.left)}</div></div>
+          <div><div class="label">Paid for term</div><div class="num">${inr(i.q.total)}</div></div>
+          <div><div class="label">Monthly value</div><div class="num">${inr(i.q.total/s.months)}</div></div>
+        </div>
+        <div><div class="flex justify-between text-xs text-mute mb-1"><span>Seats used</span><span class="num">${s.used} of ${s.users} (${i.q.pl.users} in plan${i.q.extra?`, +${i.q.extra} extra`:''})</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="btn" data-a="extend" data-id="${s.id}">Renew +1 month</button>
+          <button class="btn" data-a="seat" data-id="${s.id}">Add 1 seat (+${inr(i.p.extra)}/mo)</button>
+          ${s.paid?'':`<button class="btn btn-primary" data-a="paid" data-id="${s.id}">Mark as paid</button>`}
+          <button class="btn" data-a="remind" data-id="${s.id}">Send reminder</button>
+          <button class="btn" data-a="suspend" data-id="${s.id}">${s.suspended?'Resume access':'Suspend access'}</button>
+        </div></div>`:''}
+    </article>`}).join('');
+  return `<section><h2 class="text-2xl font-bold">Customers</h2><p class="text-mute text-sm">Every licence, its seat limit and its end date.</p></section>
+  <div class="scroll-x">${chips}</div><div class="flex flex-col gap-2">${cards||'<div class="card p-4 text-mute">No customers in this filter.</div>'}</div>`;
+}
+
+function viewProducts(){
+  const dl=[1,3,12,48].map(m=>`<label class="flex flex-col gap-1"><span class="label">${m} mo</span><div class="flex items-center gap-1"><input id="disc-${m}" type="number" min="0" max="90" inputmode="numeric" value="${S.disc[m]}" data-in="disc" data-m="${m}"><span class="text-mute text-sm">%</span></div></label>`).join('');
+  return `<section><h2 class="text-2xl font-bold">Products and pricing</h2><p class="text-mute text-sm">Change a price here and the shop updates straight away. Try it, then open Shop.</p></section>
+  ${S.products.map(p=>{const n=S.subs.filter(s=>s.p===p.id).length;return `<section class="card p-4 flex flex-col gap-3">
+    <div class="flex items-start justify-between gap-3"><div class="min-w-0"><h3 class="text-lg font-bold">${p.name}</h3><div class="text-sm text-mute">${p.kind} · ${n} customers</div></div>
+      <div class="flex items-center gap-2 text-xs text-mute">Listed<button class="switch" role="switch" aria-checked="${p.listed}" aria-label="List ${p.name} in shop" data-a="plist" data-id="${p.id}"></button></div></div>
+    <div class="flex flex-col gap-2">${p.plans.map(pl=>`<div class="card-flat p-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 items-end">
+      <div class="font-semibold">${pl.name}<span class="block text-xs text-mute font-normal">up to ${pl.users} users</span></div>
+      <label class="w-32"><span class="label">₹ per month</span><input id="pr-${p.id}-${pl.id}" type="number" min="0" inputmode="numeric" value="${pl.price}" data-in="price" data-p="${p.id}" data-pl="${pl.id}"></label></div>`).join('')}
+      <div class="card-flat p-3 flex items-end justify-between gap-3"><div class="font-semibold">Extra user<span class="block text-xs text-mute font-normal">beyond the plan limit</span></div>
+      <label class="w-32"><span class="label">₹ per user, month</span><input id="ex-${p.id}" type="number" min="0" inputmode="numeric" value="${p.extra}" data-in="extra" data-p="${p.id}"></label></div></div></section>`}).join('')}
+  <section class="card p-4 flex flex-col gap-3"><div><h3 class="text-lg font-bold">Discount for longer terms</h3><p class="text-sm text-mute">Applies to every product when the customer buys more months at once.</p></div>
+    <div class="grid grid-cols-2 gap-3">${dl}</div></section>`;
+}
+
+function viewServices(){
+  const list=S.orders.filter(o=>S.stage==='all'||o.stage===+S.stage);
+  const chips=[['all','All']].concat(STAGES.map((s,i)=>[String(i),s]))
+    .map(([k,l])=>`<button class="chip" data-a="stage" data-s="${k}" aria-pressed="${String(S.stage)===k}">${l} <span class="num text-xs opacity-70">${k==='all'?S.orders.length:S.orders.filter(o=>o.stage===+k).length}</span></button>`).join('');
+  const cats=[...new Set(S.services.map(s=>s.cat))];
+  return `<section><h2 class="text-2xl font-bold">Creative services</h2><p class="text-mute text-sm">Graphic design, video editing and motion graphics, from request to payment.</p></section>
+  <div class="scroll-x">${chips}</div>
+  <div class="flex flex-col gap-2" id="orders">${list.map(o=>{const sv=svc(o.sid),late=!o.paid||o.due<0;return `<article class="card p-3 flex flex-col gap-3 ${o.due<0&&o.stage<3?'stripe-bad':''}" id="ord-${o.id}">
+    <div class="flex items-start justify-between gap-3"><div class="min-w-0"><div class="font-semibold truncate">${esc(o.client)}</div><div class="text-[13px] text-mute">${sv.name}</div></div>
+      <div class="text-right"><div class="num font-medium">${inr(sv.price)}</div><span class="pill p-${o.paid?'good':'warn'}">${o.paid?'Paid':'Unpaid'}</span></div></div>
+    <div class="flex gap-1">${STAGES.map((s,i)=>`<div class="flex-1"><div class="bar" style="height:5px"><i style="width:${i<=o.stage?100:0}%"></i></div><div class="text-[10px] mt-1 ${i===o.stage?'font-semibold':'text-mute'}">${s}</div></div>`).join('')}</div>
+    <div class="flex items-center justify-between gap-2"><span class="text-xs text-mute">${o.stage===3?'Delivered':o.due<0?`Late by ${-o.due} day${o.due===-1?'':'s'}`:`Due in ${o.due} day${o.due===1?'':'s'}`}</span>
+      <div class="flex gap-2">${o.paid?'':`<button class="btn" data-a="opaid" data-id="${o.id}">Mark paid</button>`}${o.stage<3?`<button class="btn btn-primary" data-a="onext" data-id="${o.id}">Move to ${STAGES[o.stage+1]}</button>`:''}</div></div></article>`}).join('')||'<div class="card p-4 text-mute">No jobs at this stage.</div>'}</div>
+  <section class="flex flex-col gap-3"><h3 class="text-lg font-bold">Price list</h3>
+    ${cats.map(c=>`<div class="card"><div class="label px-3 pt-3">${c}</div>${S.services.filter(s=>s.cat===c).map(s=>`<div class="flex items-center justify-between gap-3 p-3 border-t first:border-t-0" style="border-color:var(--line)">
+      <div class="min-w-0"><div class="font-medium">${s.name}</div><div class="text-xs text-mute">${s.note}</div></div>
+      <div class="flex items-center gap-3"><span class="num">${inr(s.price)}</span><button class="switch" role="switch" aria-checked="${s.listed}" aria-label="Show ${s.name} in shop" data-a="slist" data-id="${s.id}"></button></div></div>`).join('')}</div>`).join('')}
+    <p class="text-xs text-mute">The switch controls whether a service appears in your shop.</p></section>`;
+}
+
+function viewShop(){
+  const sh=S.shop, lp=S.products.filter(p=>p.listed);
+  if(!lp.length) return `<section class="card p-4 text-mute">No products are listed. Switch one on in Products.</section>`;
+  if(!lp.find(p=>p.id===sh.p)){sh.p=lp[0].id;sh.plan=lp[0].plans[0].id;sh.users=lp[0].plans[0].users}
+  const p=prod(sh.p), q=quote(p,sh.plan,sh.users,sh.months), end=endFor(today,sh.months);
+  const best=p.plans.map(pl=>({pl,q:quote(p,pl.id,Math.max(sh.users,1),sh.months)})).sort((a,b)=>a.q.monthly-b.q.monthly)[0];
+  const hint=best.pl.id!==sh.plan?`<div class="card-flat p-3 text-sm flex items-center justify-between gap-3"><span>${best.pl.name} costs ${inr(q.monthly-best.q.monthly)} less per month for ${sh.users} users.</span><button class="btn" data-a="plan" data-id="${best.pl.id}">Switch</button></div>`:'';
+  const cats=[...new Set(S.services.filter(s=>s.listed).map(s=>s.cat))];
+  return `<section class="flex flex-col gap-1"><div class="label">What your customer sees</div><h2 class="text-2xl font-bold">Shop</h2></section>
+  <div class="scroll-x">${lp.map(x=>`<button class="chip" data-a="sprod" data-id="${x.id}" aria-pressed="${x.id===sh.p}">${x.name} <span class="opacity-70">${x.kind}</span></button>`).join('')}</div>
+  <section class="card p-4 flex flex-col gap-4">
+    <div><h3 class="text-xl font-bold">${p.name}</h3><p class="text-sm text-mute">${p.kind}. Choose a plan, add users, pick how long.</p></div>
+    <div class="flex flex-col gap-2"><div class="label">1. Plan</div>
+      <div class="grid grid-cols-3 gap-2">${p.plans.map(pl=>`<button class="opt" data-a="plan" data-id="${pl.id}" aria-pressed="${pl.id===sh.plan}"><span class="block font-semibold">${pl.name}</span><span class="num block text-[15px]">${inr(pl.price)}</span><span class="block text-[11px] text-mute">up to ${pl.users} users</span></button>`).join('')}</div></div>
+    <div class="flex flex-col gap-2"><div class="label">2. Users</div>
+      <div class="flex items-center justify-between gap-3"><div class="flex items-center gap-2">
+        <button class="btn w-11" data-a="users" data-d="-1" aria-label="One fewer user">−</button><span class="num text-2xl w-12 text-center" id="ucount">${sh.users}</span><button class="btn w-11" data-a="users" data-d="1" aria-label="One more user">+</button><button class="btn" data-a="users" data-d="5">+5</button></div>
+        <span class="text-sm text-mute text-right">${q.extra?`${q.pl.users} included + ${q.extra} extra at ${inr(p.extra)}`:`${q.pl.users-sh.users} spare in plan`}</span></div>${hint}</div>
+    <div class="flex flex-col gap-2"><div class="label">3. Duration</div>
+      <div class="grid grid-cols-4 gap-2">${[1,3,12,48].map(m=>`<button class="opt text-center" data-a="months" data-m="${m}" aria-pressed="${m===sh.months}"><span class="num block text-lg">${m}</span><span class="block text-[11px] text-mute">month${m>1?'s':''}</span><span class="block text-[11px]" style="color:var(--good)">${S.disc[m]?`save ${S.disc[m]}%`:'&nbsp;'}</span></button>`).join('')}</div></div>
+    <div class="card-flat p-4 flex flex-col gap-2 text-sm">
+      <div class="flex justify-between"><span class="text-mute">${q.pl.name}, ${q.pl.users} users</span><span class="num">${inr(q.pl.price)}/mo</span></div>
+      ${q.extra?`<div class="flex justify-between"><span class="text-mute">${q.extra} extra user${q.extra>1?'s':''}</span><span class="num">${inr(q.extra*p.extra)}/mo</span></div>`:''}
+      <div class="flex justify-between"><span class="text-mute">× ${sh.months} month${sh.months>1?'s':''}</span><span class="num">${inr(q.gross)}</span></div>
+      ${q.d?`<div class="flex justify-between" style="color:var(--good)"><span>${q.d}% term discount</span><span class="num">−${inr(q.saved)}</span></div>`:''}
+      <div class="flex justify-between items-baseline border-t pt-2" style="border-color:var(--line)"><span class="font-semibold">Total</span><span class="num text-2xl">${inr(q.total)}</span></div>
+      <div class="flex justify-between"><span class="text-mute">Access valid until</span><span class="num font-medium">${fmt(end)}</span></div></div>
+    <label class="flex flex-col gap-1"><span class="label">Business name</span><input id="biz" type="text" value="${esc(sh.biz)}" data-in="biz" autocomplete="off"></label>
+    <button class="btn btn-primary btn-lg" data-a="buy">Pay ${inr(q.total)} and activate</button>
+    <p class="text-xs text-mute text-center">Demo only. No payment is taken. Activating adds this customer under Customers.</p>
+  </section>
+  <section class="flex flex-col gap-3"><h3 class="text-lg font-bold">Creative services</h3>
+    ${cats.map(c=>`<div class="card"><div class="label px-3 pt-3">${c}</div>${S.services.filter(s=>s.listed&&s.cat===c).map(s=>`<div class="flex items-center justify-between gap-3 p-3 border-t first:border-t-0" style="border-color:var(--line)">
+      <div class="min-w-0"><div class="font-medium">${s.name}</div><div class="text-xs text-mute">${s.note}</div></div>
+      <div class="flex items-center gap-2 flex-none"><span class="num">${inr(s.price)}</span><button class="btn" data-a="request" data-id="${s.id}">Request</button></div></div>`).join('')}</div>`).join('')||'<div class="card p-4 text-mute">No services listed.</div>'}</section>`;
+}
+
+/* ---------- shell ---------- */
+const TABS=[['home','Home','<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'],
+ ['subs','Customers','<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c2 .6 3.2 2.3 3.5 5.2"/>'],
+ ['products','Products','<path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5zM3 7.5l9 4.5 9-4.5M12 12v9"/>'],
+ ['services','Services','<path d="M4 20l5-1 10-10-4-4L5 15zM13.5 6.5l4 4"/>'],
+ ['shop','Shop','<path d="M4 8h16l-1.2 11a1 1 0 0 1-1 .9H6.2a1 1 0 0 1-1-.9zM8.5 8V6.5a3.5 3.5 0 0 1 7 0V8"/>']];
+const VIEWS={home:viewHome,subs:viewSubs,products:viewProducts,services:viewServices,shop:viewShop};
+const TITLES={home:'Control Room',subs:'Customers',products:'Products',services:'Services',shop:'Shop preview'};
+function render(top){
+  $('#app').innerHTML=VIEWS[S.view]();
+  $('#ttl').textContent=TITLES[S.view];
+  $('#tabs').innerHTML=TABS.map(t=>`<button class="tab" data-a="nav" data-v="${t[0]}" ${t[0]===S.view?'aria-current="page"':''}><svg viewBox="0 0 24 24" aria-hidden="true">${t[2]}</svg>${t[1]}</button>`).join('');
+  if(top) window.scrollTo(0,0);
+}
+function nav(v,id){
+  S.view=v; try{history.replaceState(null,'','#'+v)}catch(e){}
+  if(v==='subs'&&id){S.open=id;S.filter='all'}
+  render(true);
+  if(id){const el=document.getElementById(v==='services'?'ord-'+id:'');if(el)el.scrollIntoView({block:'center'})}
+}
+const sub = id => S.subs.find(s=>s.id===id);
+
+const ACT={
+  nav:d=>nav(d.v), go:d=>nav(d.v,d.id),
+  filter:d=>{S.filter=d.f;render()}, stage:d=>{S.stage=d.s;render()},
+  open:d=>{S.open=S.open===d.id?null:d.id;render()},
+  extend:d=>{const s=sub(d.id);s.months+=1;render();toast(`${s.client} now runs to ${fmt(endFor(s.start,s.months))}`)},
+  seat:d=>{const s=sub(d.id);s.users+=1;render();toast(`Seat limit for ${s.client} is now ${s.users}`)},
+  paid:d=>{const s=sub(d.id);s.paid=true;render();toast('Marked as paid')},
+  remind:d=>toast(`Reminder queued for ${sub(d.id).client}`),
+  suspend:d=>{const s=sub(d.id);s.suspended=!s.suspended;render();toast(s.suspended?'Access suspended':'Access restored')},
+  plist:d=>{const p=prod(d.id);p.listed=!p.listed;render()},
+  slist:d=>{const s=svc(d.id);s.listed=!s.listed;render()},
+  onext:d=>{const o=S.orders.find(x=>x.id===d.id);o.stage+=1;render();toast(`Moved to ${STAGES[o.stage]}`)},
+  opaid:d=>{S.orders.find(x=>x.id===d.id).paid=true;render();toast('Payment recorded')},
+  sprod:d=>{const p=prod(d.id);Object.assign(S.shop,{p:p.id,plan:p.plans[0].id,users:p.plans[0].users});render()},
+  plan:d=>{const pl=prod(S.shop.p).plans.find(x=>x.id===d.id);Object.assign(S.shop,{plan:pl.id,users:pl.users});render()},
+  users:d=>{S.shop.users=Math.max(1,Math.min(500,S.shop.users+(+d.d)));render()},
+  months:d=>{S.shop.months=+d.m;render()},
+  buy:()=>{const sh=S.shop,p=prod(sh.p),name=sh.biz.trim()||'New customer';
+    S.subs.unshift({id:'c'+Date.now(),client:name,p:sh.p,plan:sh.plan,users:sh.users,used:1,months:sh.months,start:new Date(today),paid:true,suspended:false});
+    toast(`${name} is live until ${fmt(endFor(today,sh.months))}`)},
+  request:d=>{const s=svc(d.id);S.orders.unshift({id:'o'+Date.now(),client:S.shop.biz.trim()||'New customer',sid:s.id,stage:0,paid:false,due:5});toast(`Request for ${s.name} added to Services`)},
+  theme:()=>{const r=document.documentElement,dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.dataset.theme=dark?'light':'dark'}
+};
+document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(b&&ACT[b.dataset.a])ACT[b.dataset.a](b.dataset)});
+$('#theme').addEventListener('click',ACT.theme);
+document.addEventListener('change',e=>{
+  const t=e.target; if(!t.dataset.in) return;
+  const v=Math.max(0,+t.value||0);
+  if(t.dataset.in==='price') prod(t.dataset.p).plans.find(x=>x.id===t.dataset.pl).price=v;
+  else if(t.dataset.in==='extra') prod(t.dataset.p).extra=v;
+  else if(t.dataset.in==='disc') S.disc[t.dataset.m]=Math.min(90,v);
+  toast('Saved. The shop now uses this price');
+});
+document.addEventListener('input',e=>{if(e.target.dataset.in==='biz')S.shop.biz=e.target.value});
+
+const h=location.hash.slice(1); if(VIEWS[h]) S.view=h;
+render();
+})();
+</script>
