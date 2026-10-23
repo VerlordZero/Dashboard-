@@ -3,19 +3,17 @@
 - `index.html`: mobile prototype of the company dashboard (static, sample data).
 - `admin/`: desktop admin console (products, plans, media, branding) backed by Firebase.
 
-## Admin console setup (Firebase project `dtarks-c75b8`)
+## Admin console (no login)
 
-1. Firebase console > Build > **Authentication** > Sign-in method: enable **Email/Password**, then add your admin user.
-2. Build > **Firestore Database**: create a database.
-3. Build > **Storage**: get started (the bucket is `dtarks-c75b8.firebasestorage.app`).
-4. Deploy rules and hosting: `firebase deploy` (uses `firebase.json`, `firestore.rules`, `storage.rules`).
-5. Open the hosted URL, sign in, then go to Settings > Branding to upload the logo.
+Open `admin-standalone.html` (double-click) or `admin/index.html`. It saves straight to Firebase project `dtarks-c75b8` over HTTPS.
+One-time setup in the Firebase console:
 
-Preview without Firebase: serve `admin/` over http (`python3 -m http.server -d admin`) and open `/?demo=1`.
-Demo mode keeps data in memory only.
+1. Build > Firestore Database > Create database.
+2. Build > Storage > Get started.
+3. Rules tab of each: paste `firestore.test.rules` / `storage.test.rules` and Publish (test-only, anyone can read and write).
 
-Data layout: Firestore `products/{id}` (name, plans, media links), `settings/company` (name, `logoUrl`).
-Files go to Storage under `products/{id}/...` and `branding/...`.
+If something fails the page shows the exact reason. Try `?demo` on the address to preview with sample data (nothing saved).
+Data layout: Firestore `products/{id}`, `settings/company`; files in Storage under `products/{id}/...` and `branding/...`.
 
 ## Cloudinary
 

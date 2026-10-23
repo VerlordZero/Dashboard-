@@ -1,9 +1,9 @@
-import { firebaseConfig, requireLogin } from './firebase-config.js';
+import { firebaseConfig } from './firebase-config.js';
 
 /* ================= helpers ================= */
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const DEMO = new URLSearchParams(location.search).has('demo') || location.protocol === 'file:';
+const DEMO = new URLSearchParams(location.search).has('demo');
 const CUR = { INR: '₹', USD: '$', EUR: '€', GBP: '£', AED: 'AED ' };
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 const MAX_IMG = 5 * 1024 * 1024, MAX_VID = 100 * 1024 * 1024, MAX_GALLERY = 5;
@@ -48,37 +48,58 @@ const ICON = {
 const ic = (n, cls = 'ic') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
 
 /* ================= backends ================= */
-async function firebaseBackend() {
-  const base = 'https://www.gstatic.com/firebasejs/10.14.1/';
-  const [{ initializeApp }, A, F, St] = await Promise.all(
-    ['app', 'auth', 'firestore', 'storage'].map(m => import(`${base}firebase-${m}.js`)));
-  const app = initializeApp(firebaseConfig);
-  const auth = A.getAuth(app), db = F.getFirestore(app), st = St.getStorage(app);
-  import(`${base}firebase-analytics.js`).then(m => m.isSupported().then(ok => ok && m.getAnalytics(app))).catch(() => {});
+function restBackend() {
+  // Talks to Firestore and Firebase Storage over plain HTTPS (no SDK, no sign-in).
+  const P = firebaseConfig.projectId, K = firebaseConfig.apiKey, BK = firebaseConfig.storageBucket;
+  const FS = `https://firestore.googleapis.com/v1/projects/${P}/databases/(default)/documents`;
+  const ST = `https://firebasestorage.googleapis.com/v0/b/${BK}/o`;
+  const enc = v => v == null ? { nullValue: null } : typeof v === 'string' ? { stringValue: v } : typeof v === 'boolean' ? { booleanValue: v }
+    : typeof v === 'number' ? (Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v })
+    : Array.isArray(v) ? { arrayValue: { values: v.map(enc) } } : { mapValue: { fields: encF(v) } };
+  const encF = o => Object.fromEntries(Object.entries(o).filter(([, x]) => x !== undefined).map(([k, x]) => [k, enc(x)]));
+  const dec = v => 'stringValue' in v ? v.stringValue : 'integerValue' in v ? +v.integerValue : 'doubleValue' in v ? v.doubleValue : 'booleanValue' in v ? v.booleanValue
+    : 'arrayValue' in v ? (v.arrayValue.values || []).map(dec) : 'mapValue' in v ? decF(v.mapValue.fields || {}) : null;
+  const decF = f => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, dec(v)]));
+  const explain = (status, msg, where) => status === 403 ? `Permission denied by ${where}. In the Firebase console, open ${where} > Rules, paste the test rules from this repo and click Publish.`
+    : status === 404 && /database/i.test(msg || '') ? 'Firestore database not found. In the Firebase console open Build > Firestore Database and click Create database.'
+    : status === 404 && where === 'Storage' ? 'Storage bucket not found. In the Firebase console open Build > Storage and click Get started.'
+    : `${where} error ${status}: ${msg || 'unknown'}`;
+  async function call(url, opt, where) {
+    let r; try { r = await fetch(url, opt); } catch (e) { throw new Error(`Could not reach Google (${e.message}). Check your internet connection or an ad blocker.`); }
+    if (r.ok) return r.status === 204 ? null : r.json().catch(() => null);
+    let m = ''; try { m = (await r.json()).error?.message; } catch (e) {}
+    const err = new Error(explain(r.status, m, where)); err.status = r.status; err.raw = m; throw err;
+  }
+  const doc = (path, opt) => call(`${FS}/${path}${path.includes('?') ? '&' : '?'}key=${K}`, opt, 'Firestore');
+  const put = (path, o) => doc(path, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: encF(o) }) });
+  const stUrl = (name, extra = '') => `${ST}/${encodeURIComponent(name)}${extra}`;
+  const upload = (path, file, onP) => new Promise((res, rej) => {
+    const x = new XMLHttpRequest(); x.open('POST', `${ST}?name=${encodeURIComponent(path)}`);
+    x.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    x.upload.onprogress = e => e.lengthComputable && onP(e.loaded, e.total);
+    x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch (e) {}
+      if (x.status >= 200 && x.status < 300) res({ url: stUrl(j.name, `?alt=media&token=${(j.downloadTokens || '').split(',')[0]}`), path: j.name, provider: 'firebase' });
+      else rej(new Error(explain(x.status, j.error?.message, 'Storage'))); };
+    x.onerror = () => rej(new Error('Could not reach Google Storage. Check your internet connection or an ad blocker.'));
+    x.send(file);
+  });
+  const removeFile = path => fetch(stUrl(path), { method: 'DELETE' }).catch(() => {});
   return {
-    onAuth: cb => requireLogin ? A.onAuthStateChanged(auth, u => cb(u ? { email: u.email } : null)) : (setTimeout(() => cb({ email: 'Test mode (no login)' }), 0), () => {}),
-    signIn: (e, p) => A.signInWithEmailAndPassword(auth, e, p),
-    signOut: () => A.signOut(auth),
-    newId: () => F.doc(F.collection(db, 'products')).id,
-    listProducts: async () => (await F.getDocs(F.collection(db, 'products'))).docs.map(d => ({ ...d.data(), id: d.id })),
-    saveProduct: p => F.setDoc(F.doc(db, 'products', p.id), p),
-    deleteProduct: id => F.deleteDoc(F.doc(db, 'products', id)),
-    getSettings: async () => { const s = await F.getDoc(F.doc(db, 'settings', 'company')); return s.exists() ? s.data() : {}; },
-    saveSettings: o => F.setDoc(F.doc(db, 'settings', 'company'), o),
-    upload: (path, file, onP) => new Promise((res, rej) => {
-      const r = St.ref(st, path), t = St.uploadBytesResumable(r, file, { contentType: file.type });
-      t.on('state_changed', s => onP(s.bytesTransferred, s.totalBytes), rej, async () => res({ url: await St.getDownloadURL(r), path }));
-    }),
-    removeFile: path => St.deleteObject(St.ref(st, path)).catch(() => {}),
-    getToken: async () => (auth.currentUser ? auth.currentUser.getIdToken() : ''),
-    ping: async () => { const r = F.doc(db, 'settings', '_ping'); await F.setDoc(r, { t: Date.now() }); const s = await F.getDoc(r); await F.deleteDoc(r); if (!s.exists()) throw new Error('Wrote a document but could not read it back'); },
-    pingStorage: async () => { const r = St.ref(st, '_ping/test.png'); await St.uploadBytes(r, await (await fetch(PNG)).blob(), { contentType: 'image/png' }); await St.getDownloadURL(r); await St.deleteObject(r); },
-    stats: async () => {
-      let files = 0, size = 0; const CAP = 300;
-      const walk = async r => { const l = await St.list(r, { maxResults: 1000 }); for (const i of l.items) { if (files >= CAP) return; files++; try { size += (await St.getMetadata(i)).size; } catch (e) {} } for (const q of l.prefixes) await walk(q); };
-      await walk(St.ref(st));
-      const c = await F.getCountFromServer(F.collection(db, 'products'));
-      return { products: c.data().count, files, size, capped: files >= CAP };
+    onAuth: cb => { setTimeout(() => cb({ email: 'Test mode (no login)' }), 0); return () => {}; },
+    newId: () => Array.from(crypto.getRandomValues(new Uint8Array(10)), b => b.toString(36).padStart(2, '0')).join('').slice(0, 20),
+    async listProducts() { const j = await doc('products?pageSize=300'); return (j?.documents || []).map(d => ({ ...decF(d.fields || {}), id: d.name.split('/').pop() })); },
+    saveProduct: p => put(`products/${p.id}`, p),
+    deleteProduct: id => doc(`products/${id}`, { method: 'DELETE' }),
+    async getSettings() { try { return decF((await doc('settings/company')).fields || {}); } catch (e) { if (e.status === 404 && /document/i.test(e.raw || '')) return {}; throw e; } },
+    saveSettings: o => put('settings/company', o),
+    upload, removeFile, getToken: async () => '',
+    async ping() { await put('settings/_ping', { t: Date.now() }); await doc('settings/_ping'); await doc('settings/_ping', { method: 'DELETE' }); },
+    async pingStorage() { const r = await upload('_ping/test.png', new File([await (await fetch(PNG)).blob()], 'ping.png', { type: 'image/png' }), () => {}); await removeFile(r.path); },
+    async stats() {
+      const products = (await this.listProducts()).length;
+      const l = await call(`${ST}?maxResults=1000`, {}, 'Storage'), items = (l?.items || []);
+      const metas = await Promise.all(items.slice(0, 100).map(i => fetch(stUrl(i.name)).then(r => r.json()).catch(() => ({}))));
+      return { products, files: items.length, size: metas.reduce((a, m) => a + (+m.size || 0), 0), capped: items.length > 100 };
     }
   };
 }
@@ -235,7 +256,7 @@ function sidebar() {
     <nav class="nav" aria-label="Main">${NAV.map(g => `<div class="nav-group">${g.group}</div>${g.items.map(i => `
       <a href="${i.href}" class="${top === i.key && !i.subs ? 'on' : ''}" ${top === i.key && !i.subs ? 'aria-current="page"' : ''}>${ic(i.icon)}${i.label}</a>
       ${(i.subs || []).map(([l, h, k]) => `<a href="${h}" class="sub ${key === k || (k === 'products' && key === 'products/edit') ? 'on' : ''}">${l}</a>`).join('')}`).join('')}`).join('')}</nav>
-    <div class="side-foot">${DEMO ? 'Demo mode: changes are not saved' : 'Connected to Firebase'}</div></aside>`;
+    <div class="side-foot">${DEMO ? 'Demo mode: changes are not saved' : 'Saving to Firebase'}</div></aside>`;
 }
 const CRUMB = { media: ['Catalog', 'Media library'], dashboard: ['Dashboard'], products: ['Products', 'All products'], 'products/new': ['Products', 'Add product'], 'products/edit': ['Products', 'Edit product'], 'settings/branding': ['Settings', 'Branding'], 'settings/company': ['Settings', 'Company'], 'settings/integrations': ['Settings', 'Integrations'] };
 
@@ -243,17 +264,8 @@ function shell(view) {
   const c = CRUMB[routeKey()] || ['Dashboard'], u = state.user.email || '';
   return `<div class="app">${sidebar()}<div class="main">
     <header class="top"><div class="crumbs"><button class="btn btn-sm menu-btn" data-a="menu" aria-label="Open menu">${ic('menu')}</button>${c.map((x, i) => i === c.length - 1 ? `<b>${x}</b>` : `<span>${x}</span><span>/</span>`).join('')}</div>
-      <div class="user"><span style="color:var(--mute);font-size:13px">${esc(u)}</span><div class="avatar">${esc((u[0] || 'A').toUpperCase())}</div>${requireLogin && !DEMO ? '<button class="btn btn-sm" data-a="logout">Sign out</button>' : ''}</div></header>
-    <main class="view" id="view">${DEMO ? '<div class="banner warn"><div><b>Demo mode.</b> Nothing is saved to Firebase. Open this page from http://localhost or your Firebase Hosting address, then sign in, to save real data.</div></div>' : ''}${view}</main></div></div>`;
-}
-
-function loginView(err) {
-  return `<div class="login"><form class="card" id="login" novalidate>
-    <div><h1>Sign in</h1><p style="color:var(--mute)">Use the admin account created in Firebase Authentication.</p></div>
-    ${err ? `<div class="banner bad">${esc(err)}</div>` : ''}
-    <div class="field"><label for="em">Email</label><input id="em" type="email" autocomplete="username" required></div>
-    <div class="field"><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" required></div>
-    <button class="btn btn-primary" style="min-height:44px" type="submit">Sign in</button></form></div>`;
+      <div class="user"><span style="color:var(--mute);font-size:13px">${esc(u)}</span><div class="avatar">${esc((u[0] || 'A').toUpperCase())}</div></div></header>
+    <main class="view" id="view">${DEMO ? '<div class="banner warn"><div><b>Demo mode.</b> Nothing is saved to Firebase. Remove ?demo from the address to save real data.</div></div>' : ''}${view}</main></div></div>`;
 }
 
 /* ================= views ================= */
@@ -413,13 +425,13 @@ async function runTests() {
 /* ================= render ================= */
 function render() {
   const root = $('#root');
-  if (!state.user) { root.innerHTML = loginView(render.err); $('#login').onsubmit = onLogin; return; }
+  if (!state.user) { root.innerHTML = '<div class="empty" style="padding-top:20vh"><b>Loading…</b></div>'; return; }
   const key = routeKey(); let view;
   if (!state.loaded) view = `<div class="empty"><b>Loading…</b></div>`;
   else {
     if (key !== 'products/new' && key !== 'products/edit') F = null;
     if (!key.startsWith('settings/branding')) L = null;
-    const err = state.error ? `<div class="banner bad"><div><b>Could not reach Firebase.</b> ${esc(state.error)}<br>Check that Authentication, Firestore and Storage are enabled and the rules in this repo are deployed.</div></div>` : '';
+    const err = state.error ? `<div class="banner bad"><div><b>Could not load from Firebase.</b> ${esc(state.error)}</div></div>` : '';
     if (key === 'products/new' || key === 'products/edit') { if (!F || F.key !== location.hash) initForm(); view = viewForm(); }
     else view = err + ({ dashboard: viewDashboard, products: viewProducts, 'settings/branding': viewBranding, 'settings/company': viewCompany, 'settings/integrations': viewIntegrations, media: viewMedia }[key] || viewDashboard)();
   }
@@ -435,12 +447,6 @@ async function loadAll() {
   catch (e) { state.error = e.message || String(e); }
   state.loaded = true; render();
 }
-async function onLogin(e) {
-  e.preventDefault();
-  try { await B.signIn($('#em').value.trim(), $('#pw').value); }
-  catch (er) { render.err = /invalid|wrong|user-not-found|credential/i.test(er.code + er.message) ? 'Email or password is incorrect.' : (er.message || 'Sign in failed.'); render(); }
-}
-
 function pickFiles(slot, files) {
   files = [...files]; if (!files.length) return;
   const isVid = slot === 'video', max = isVid ? MAX_VID : MAX_IMG, ok = [];
@@ -526,7 +532,6 @@ document.addEventListener('click', async e => {
   const b = e.target.closest('[data-a]'); if (!b) return;
   const a = b.dataset.a;
   if (a === 'menu') { state.menu = !state.menu; $('#side').classList.toggle('open', state.menu); }
-  else if (a === 'logout') { B.signOut(); state.loaded = false; }
   else if (a === 'addplan') { F.data.plans.push(blankPlan()); render(); }
   else if (a === 'rmplan') { F.data.plans.splice(+b.dataset.i, 1); render(); }
   else if (a === 'rmmedia') {
@@ -593,7 +598,7 @@ window.addEventListener('hashchange', () => { state.menu = false; window.scrollT
 /* ================= boot ================= */
 (async function boot() {
   $('#root').innerHTML = '<div class="empty" style="padding-top:20vh"><b>Loading…</b></div>';
-  try { B = DEMO ? demoBackend() : await firebaseBackend(); }
+  try { B = DEMO ? demoBackend() : restBackend(); }
   catch (e) { $('#root').innerHTML = `<div class="empty" style="padding-top:20vh"><b>Could not load Firebase</b>${esc(e.message)}<br>Open this page over http(s), for example with Firebase Hosting, and check your connection.</div>`; return; }
   B.onAuth(async u => {
     const was = state.user; state.user = u; render.err = '';
