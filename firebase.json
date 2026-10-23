@@ -1,0 +1,5 @@
+{
+  "hosting": { "public": "admin", "ignore": ["firebase.json", "**/.*"] },
+  "firestore": { "rules": "firestore.rules" },
+  "storage": { "rules": "storage.rules" }
+}
