@@ -19,8 +19,7 @@ Data layout: Firestore `products/{id}`, `settings/company`; files in Storage und
 
 - **Uploads:** create an unsigned upload preset named `dashboard_unsigned` (Cloudinary Settings > Upload > Upload presets). The cloud name is in `admin/firebase-config.js`.
 - **Media library and usage numbers:** run the local helper, which keeps the API secret on your computer:
-  1. `cp server/.env.example server/.env` and fill in `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET`.
-  2. `node server/cloudinary-server.js` (Node 18+). Leave it running and open the console.
+  1. Double-click `server/start-helper.bat` (or run `node server/cloudinary-server.js`). The first time it asks for your API key and secret and saves them in `server/.env` on your computer.
 - Settings > Integrations > "Run connection tests" checks the database, Cloudinary upload and the helper.
 - The `functions/` folder is an alternative for hosting the same helper on Firebase (needs the Blaze plan).
 - Rebuild the single-file version with `python3 build-standalone.py`.
