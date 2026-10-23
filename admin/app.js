@@ -14,6 +14,7 @@ const mb = b => (b / 1048576).toFixed(0);
 const safeName = n => n.toLowerCase().replace(/[^a-z0-9.]+/g, '-').slice(-40);
 
 function toast(msg, bad) {
+  if ([...document.querySelectorAll('.toast')].some(t => t.textContent === msg)) return;
   const t = document.createElement('div');
   t.className = 'toast' + (bad ? ' bad' : ''); t.textContent = msg;
   $('#toasts').append(t); setTimeout(() => t.remove(), 3600);
@@ -51,7 +52,8 @@ const ic = (n, cls = 'ic') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidd
 function restBackend() {
   // Talks to Firestore and Firebase Storage over plain HTTPS (no SDK, no sign-in).
   const P = firebaseConfig.projectId, K = firebaseConfig.apiKey, BK = firebaseConfig.storageBucket;
-  const FS = `https://firestore.googleapis.com/v1/projects/${P}/databases/(default)/documents`;
+  const noDb = m => /database[^"]*does not exist/i.test(m || '');
+  let dbId = null; // your project's database may be named (default) or default
   const ST = `https://firebasestorage.googleapis.com/v0/b/${BK}/o`;
   const enc = v => v == null ? { nullValue: null } : typeof v === 'string' ? { stringValue: v } : typeof v === 'boolean' ? { booleanValue: v }
     : typeof v === 'number' ? (Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v })
@@ -61,7 +63,7 @@ function restBackend() {
     : 'arrayValue' in v ? (v.arrayValue.values || []).map(dec) : 'mapValue' in v ? decF(v.mapValue.fields || {}) : null;
   const decF = f => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, dec(v)]));
   const explain = (status, msg, where) => status === 403 ? `Permission denied by ${where}. In the Firebase console, open ${where} > Rules, paste the test rules from this repo and click Publish.`
-    : status === 404 && /database/i.test(msg || '') ? 'Firestore database not found. In the Firebase console open Build > Firestore Database and click Create database.'
+    : status === 404 && noDb(msg) ? 'Firestore database not found. In the Firebase console open Build > Firestore Database and click Create database.'
     : status === 404 && where === 'Storage' ? 'Storage bucket not found. In the Firebase console open Build > Storage and click Get started.'
     : `${where} error ${status}: ${msg || 'unknown'}`;
   async function call(url, opt, where) {
@@ -70,7 +72,14 @@ function restBackend() {
     let m = ''; try { m = (await r.json()).error?.message; } catch (e) {}
     const err = new Error(explain(r.status, m, where)); err.status = r.status; err.raw = m; throw err;
   }
-  const doc = (path, opt) => call(`${FS}/${path}${path.includes('?') ? '&' : '?'}key=${K}`, opt, 'Firestore');
+  const go = (id, path, opt) => call(`https://firestore.googleapis.com/v1/projects/${P}/databases/${id}/documents/${path}${path.includes('?') ? '&' : '?'}key=${K}`, opt, 'Firestore');
+  async function doc(path, opt) {
+    if (dbId) return go(dbId, path, opt);
+    try { const r = await go('(default)', path, opt); dbId = '(default)'; return r; }
+    catch (e) { if (e.status !== 404 || !noDb(e.raw)) { if (e.status) dbId = '(default)'; throw e; } }
+    try { const r = await go('default', path, opt); dbId = 'default'; return r; }
+    catch (e) { if (e.status && e.status !== 404) dbId = 'default'; throw e; }
+  }
   const put = (path, o) => doc(path, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: encF(o) }) });
   const stUrl = (name, extra = '') => `${ST}/${encodeURIComponent(name)}${extra}`;
   const upload = (path, file, onP) => new Promise((res, rej) => {
@@ -90,7 +99,7 @@ function restBackend() {
     async listProducts() { const j = await doc('products?pageSize=300'); return (j?.documents || []).map(d => ({ ...decF(d.fields || {}), id: d.name.split('/').pop() })); },
     saveProduct: p => put(`products/${p.id}`, p),
     deleteProduct: id => doc(`products/${id}`, { method: 'DELETE' }),
-    async getSettings() { try { return decF((await doc('settings/company')).fields || {}); } catch (e) { if (e.status === 404 && /document/i.test(e.raw || '')) return {}; throw e; } },
+    async getSettings() { try { return decF((await doc('settings/company')).fields || {}); } catch (e) { if (e.status === 404 && /^Document/i.test(e.raw || '')) return {}; throw e; } },
     saveSettings: o => put('settings/company', o),
     upload, removeFile, getToken: async () => '',
     async ping() { await put('settings/_ping', { t: Date.now() }); await doc('settings/_ping'); await doc('settings/_ping', { method: 'DELETE' }); },
@@ -443,7 +452,7 @@ function render() {
 /* ================= actions ================= */
 async function loadAll() {
   const slow = new Promise((_, rej) => setTimeout(() => rej(new Error('Firestore did not answer in 15 seconds. An ad blocker or privacy extension (net::ERR_BLOCKED_BY_CLIENT in the browser console) may be blocking firestore.googleapis.com. Turn it off for this page or use an Incognito window.')), 15000));
-  try { [state.settings, state.products] = await Promise.race([Promise.all([B.getSettings().then(s => ({ currency: 'INR', ...s })), B.listProducts()]), slow]); state.error = ''; }
+  try { [state.settings, state.products] = await Promise.race([Promise.all([B.getSettings().then(s => ({ currency: 'INR', cloudName: firebaseConfig.cloudName || '', uploadPreset: firebaseConfig.uploadPreset || '', ...s })), B.listProducts()]), slow]); state.error = ''; }
   catch (e) { state.error = e.message || String(e); }
   state.loaded = true; render();
 }

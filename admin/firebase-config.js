@@ -7,5 +7,8 @@ export const firebaseConfig = {
   storageBucket: "dtarks-c75b8.firebasestorage.app",
   messagingSenderId: "469572538926",
   appId: "1:469572538926:web:1329782782b44e9f4c05bf",
+  // Optional defaults for Cloudinary uploads (not secret). Can also be set in Settings, Integrations.
+  cloudName: "",
+  uploadPreset: "",
   measurementId: "G-EMYJEQHNKF"
 };
