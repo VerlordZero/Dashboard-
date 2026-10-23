@@ -1,4 +1,4 @@
-import { firebaseConfig } from './firebase-config.js';
+import { firebaseConfig, cloudinaryConfig } from './firebase-config.js';
 
 /* ================= helpers ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -180,13 +180,45 @@ function cloudUpload(file, folder, onP) {
 }
 const uploadAny = (path, file, onP) => cloudOn() ? cloudUpload(file, path.split('/').slice(0, -1).join('/'), onP) : B.upload(path, file, onP);
 const adminCode = () => { try { return localStorage.getItem('adminCode') || ''; } catch (e) { return ''; } };
+// DEMO: talks to Cloudinary's admin service straight from the browser using the key and secret in firebase-config.js.
+async function directCloud(action, params, body) {
+  const { cloudName, apiKey, apiSecret } = cloudinaryConfig, base = `https://api.cloudinary.com/v1_1/${cloudName}`, auth = 'Basic ' + btoa(`${apiKey}:${apiSecret}`);
+  const call = async (p, init = {}) => {
+    const r = await fetch(base + p, { ...init, headers: { Authorization: auth, 'Content-Type': 'application/json' } });
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error?.message || 'Cloudinary HTTP ' + r.status); return j;
+  };
+  const search = b => call('/resources/search', { method: 'POST', body: JSON.stringify(b) });
+  if (action === 'usage') {
+    const [u, v, i] = await Promise.all([call('/usage'), search({ expression: 'resource_type:video', max_results: 1 }), search({ expression: 'resource_type:image', max_results: 1 })]);
+    return { plan: u.plan, storageBytes: u.storage?.usage ?? 0, credits: u.credits || null, videos: v.total_count, images: i.total_count };
+  }
+  if (action === 'list') {
+    const t = params.type, expression = t === 'image' || t === 'video' ? `resource_type:${t}` : 'resource_type:image OR resource_type:video';
+    const j = await search({ expression, sort_by: [{ created_at: 'desc' }], max_results: 30, ...(params.cursor ? { next_cursor: params.cursor } : {}) });
+    return { total: j.total_count, nextCursor: j.next_cursor || null, items: j.resources.map(r => ({ publicId: r.public_id, type: r.resource_type, url: r.secure_url, bytes: r.bytes, createdAt: Date.parse(r.created_at),
+      thumb: r.resource_type === 'video' ? r.secure_url.replace(/\.[a-z0-9]+$/i, '.jpg') : r.secure_url.replace('/upload/', '/upload/c_fill,w_400,h_300,q_auto/') })) };
+  }
+  let deleted = 0; const groups = {};
+  for (const it of body.items.slice(0, 100)) (groups[it.type === 'video' ? 'video' : 'image'] ||= []).push(it.publicId);
+  for (const [type, ids] of Object.entries(groups)) {
+    const q = new URLSearchParams(); ids.forEach(id => q.append('public_ids[]', id)); q.set('invalidate', 'true');
+    const j = await call(`/resources/${type}/upload?${q}`, { method: 'DELETE' });
+    deleted += Object.values(j.deleted || {}).filter(v => v === 'deleted').length;
+  }
+  return { deleted };
+}
 async function cloudApi(action, params = {}, body) {
-  let base = (state.settings.usageUrl || firebaseConfig.functionUrl || '').trim();
-  if (base.startsWith('/') && location.protocol === 'file:') base = 'http://localhost:8787'; // opened from a file: use the local helper
+  let blocked = false;
+  if (cloudinaryConfig.apiKey && cloudinaryConfig.apiSecret) {
+    try { return await directCloud(action, params, body); }
+    catch (e) { if (!(e instanceof TypeError)) throw e; blocked = true; } // TypeError = the browser refused the call
+  }
+  let base = (state.settings.usageUrl || cloudinaryConfig.functionUrl || '').trim();
+  if (base.startsWith('/') && (location.protocol === 'file:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname))) base = 'http://localhost:8787';
   if (!base) throw new Error('Cloudinary helper address not set. See Settings, Integrations.');
   const url = base + (base.includes('?') ? '&' : '?') + new URLSearchParams({ action, ...params });
   const r = await fetch(url, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + await B.getToken(), 'X-Admin-Code': adminCode(), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined })
-    .catch(() => { throw new Error(`Cannot reach the Cloudinary helper at ${base}. Start it with: node server/cloudinary-server.js`); });
+    .catch(() => { throw new Error(`${blocked ? 'The browser blocked the direct call to Cloudinary, and ' : ''}the Cloudinary helper at ${base} is not reachable. Start it with: node server/cloudinary-server.js`); });
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j;
 }
 async function fetchCloudUsage() {
@@ -299,7 +331,7 @@ function shell(view) {
   return `<div class="app">${sidebar()}<div class="main">
     <header class="top"><div class="crumbs"><button class="btn btn-sm menu-btn" data-a="menu" aria-label="Open menu">${ic('menu')}</button>${c.map((x, i) => i === c.length - 1 ? `<b>${x}</b>` : `<span>${x}</span><span>/</span>`).join('')}</div>
       <div class="user"><span style="color:var(--mute);font-size:13px">${esc(u)}</span><div class="avatar">${esc((u[0] || 'A').toUpperCase())}</div></div></header>
-    <main class="view" id="view">${DEMO ? '<div class="banner warn"><div><b>Demo mode.</b> Nothing is saved to Firebase. Remove ?demo from the address to save real data.</div></div>' : ''}${view}</main></div></div>`;
+    <main class="view" id="view">${'<div class="banner warn" style="font-size:12px;padding:8px 14px"><div><b>DEMO SETUP, NOT SECURE.</b> <b>Firebase:</b> database rules are open to everyone. <b>Cloudinary:</b> API key and secret are inside this page. Lock both before real use.</div></div>'}${DEMO ? '<div class="banner warn"><div><b>Demo mode.</b> Nothing is saved to Firebase. Remove ?demo from the address to save real data.</div></div>' : ''}${view}</main></div></div>`;
 }
 
 /* ================= views ================= */
@@ -478,7 +510,7 @@ function render() {
 /* ================= actions ================= */
 async function loadAll() {
   const slow = new Promise((_, rej) => setTimeout(() => rej(new Error('Firestore did not answer in 15 seconds. An ad blocker or privacy extension (net::ERR_BLOCKED_BY_CLIENT in the browser console) may be blocking firestore.googleapis.com. Turn it off for this page or use an Incognito window.')), 15000));
-  try { [state.settings, state.products] = await Promise.race([Promise.all([B.getSettings().then(s => ({ currency: 'INR', cloudName: firebaseConfig.cloudName || '', uploadPreset: firebaseConfig.uploadPreset || '', ...s })), B.listProducts()]), slow]); state.error = ''; }
+  try { [state.settings, state.products] = await Promise.race([Promise.all([B.getSettings().then(s => ({ currency: 'INR', cloudName: cloudinaryConfig.cloudName || '', uploadPreset: cloudinaryConfig.uploadPreset || '', ...s })), B.listProducts()]), slow]); state.error = ''; }
   catch (e) { state.error = e.message || String(e); }
   state.loaded = true; render();
 }
