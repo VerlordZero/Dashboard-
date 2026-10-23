@@ -158,6 +158,17 @@ input.bad,select.bad{border-color:var(--bad)}
   .grid2,.grid3{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
+.mtile{position:relative;overflow:hidden;min-width:0}
+.mthumb{display:block;width:100%;aspect-ratio:4/3;padding:0;border:0;background:var(--raise);cursor:pointer;position:relative}
+.mthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.mplay{position:absolute;left:8px;bottom:8px;background:rgba(14,34,54,.85);color:#fff;font-size:11px;padding:1px 8px;border-radius:99px}
+.mchk{position:absolute;top:8px;left:8px;z-index:2;background:var(--surface);border-radius:6px;padding:4px;display:flex}
+.mchk input{width:18px;height:18px;margin:0}
+.minfo{padding:10px 12px}.minfo b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.minfo span{color:var(--mute);font-size:12px}
+.chip{min-height:34px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-weight:500;font-size:13px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
 </style>
 </head>
 <body>
@@ -286,6 +297,7 @@ function demoBackend() {
 
 /* ================= state ================= */
 const state = { user: null, settings: { currency: 'INR' }, products: [], loaded: false, error: '', q: '', status: 'all', menu: false };
+state.media = { type: 'all', items: [], cursor: null, total: 0, loading: false, loaded: false, err: '', sel: new Set() };
 let B = null, F = null, L = null; // backend, product form, logo form
 
 /* ---- Cloudinary (unsigned uploads from the browser, usage via a Cloud Function) ---- */
@@ -302,11 +314,76 @@ function cloudUpload(file, folder, onP) {
   });
 }
 const uploadAny = (path, file, onP) => cloudOn() ? cloudUpload(file, path.split('/').slice(0, -1).join('/'), onP) : B.upload(path, file, onP);
+async function cloudApi(action, params = {}, body) {
+  const base = (state.settings.usageUrl || '').trim();
+  if (!base) throw new Error('Function URL not set. Deploy the function and paste its URL in Settings, Integrations.');
+  const url = base + (base.includes('?') ? '&' : '?') + new URLSearchParams({ action, ...params });
+  const r = await fetch(url, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + await B.getToken(), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j;
+}
 async function fetchCloudUsage() {
-  const u = (state.settings.usageUrl || '').trim();
-  if (!u) { if (DEMO) return { sample: true, storageBytes: 2.4e9, credits: { usage: 12.4, limit: 25, used_percent: 49.6 }, videos: 18, images: 342 }; throw new Error('Usage endpoint not set. Deploy the function and paste its URL in Settings, Integrations.'); }
-  const r = await fetch(u, { headers: { Authorization: 'Bearer ' + await B.getToken() } }), j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j;
+  if (!(state.settings.usageUrl || '').trim() && DEMO) return { sample: true, storageBytes: 2.4e9, credits: { usage: 12.4, limit: 25, used_percent: 49.6 }, videos: 18, images: 342 };
+  return cloudApi('usage');
+}
+/* ---- media library ---- */
+const svgThumb = i => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="hsl(${i * 47 % 360} 40% 58%)"/><text x="200" y="160" font-size="28" font-family="sans-serif" fill="#fff" text-anchor="middle">Sample ${i + 1}</text></svg>`);
+let demoMedia = Array.from({ length: 14 }, (_, i) => { const v = i % 4 === 3; return { publicId: `sample/${v ? 'clip' : 'image'}-${i + 1}`, type: v ? 'video' : 'image', url: svgThumb(i), thumb: svgThumb(i), bytes: (v ? 18e6 : 2.1e5) + i * 37000, createdAt: Date.now() - i * 864e5, sample: true }; });
+const demoOn = () => DEMO && !(state.settings.usageUrl || '').trim();
+const mkey = m => m.type + ':' + m.publicId;
+function mediaUse() {
+  const map = new Map(), add = (m, name) => { if (m?.publicId) map.set(m.publicId, [...(map.get(m.publicId) || []), name]); };
+  state.products.forEach(p => [p.thumbnail, p.mainImage, p.video, ...(p.gallery || [])].forEach(m => add(m, p.name)));
+  if (state.settings.logoPublicId) map.set(state.settings.logoPublicId, ['Company logo']);
+  return map;
+}
+async function loadMedia(reset) {
+  const m = state.media; if (m.loading) return; m.loading = true; m.err = '';
+  if (reset) { m.items = []; m.cursor = null; m.sel.clear(); }
+  render();
+  try {
+    let r;
+    if (demoOn()) { const list = demoMedia.filter(x => m.type === 'all' || x.type === m.type); r = { items: list, total: list.length, nextCursor: null }; }
+    else r = await cloudApi('list', { type: m.type, ...(m.cursor ? { cursor: m.cursor } : {}) });
+    m.items.push(...r.items); m.cursor = r.nextCursor; m.total = r.total; m.loaded = true;
+  } catch (e) { m.err = e.message; m.loaded = true; }
+  m.loading = false; render();
+}
+async function deleteMedia(keys) {
+  const m = state.media, items = m.items.filter(x => keys.includes(mkey(x)));
+  if (!items.length) return;
+  const use = mediaUse(), inUse = items.filter(x => use.has(x.publicId)).length;
+  const ok = await confirmBox(`Delete ${items.length} file${items.length > 1 ? 's' : ''}`, `This permanently removes ${items.length > 1 ? 'them' : 'it'} from Cloudinary.` + (inUse ? ` ${inUse} ${inUse > 1 ? 'are' : 'is'} used by a product or the logo, which will then show a broken image.` : ''), 'Delete');
+  if (!ok) return;
+  try {
+    if (demoOn()) demoMedia = demoMedia.filter(x => !keys.includes(mkey(x)));
+    else await cloudApi('delete', {}, { items: items.map(x => ({ publicId: x.publicId, type: x.type })) });
+    m.items = m.items.filter(x => !keys.includes(mkey(x))); m.total = Math.max(0, m.total - items.length); keys.forEach(k => m.sel.delete(k));
+    state.usage = null; toast(`Deleted ${items.length} file${items.length > 1 ? 's' : ''}`); render();
+  } catch (e) { toast('Delete failed: ' + e.message, true); }
+}
+function viewMedia() {
+  const m = state.media, use = mediaUse();
+  const chips = [['all', 'All'], ['image', 'Images'], ['video', 'Videos']].map(([k, l]) => `<button class="chip" data-a="mtype" data-t="${k}" aria-pressed="${m.type === k}">${l}</button>`).join('');
+  const tiles = m.items.map(x => { const k = mkey(x), u = use.get(x.publicId), name = x.publicId.split('/').pop();
+    return `<div class="card mtile"><label class="mchk"><input type="checkbox" data-a="msel" data-id="${esc(k)}" ${m.sel.has(k) ? 'checked' : ''} aria-label="Select ${esc(name)}"></label>
+      <button class="mthumb" data-a="mview" data-id="${esc(k)}" aria-label="Preview ${esc(name)}"><img src="${esc(x.thumb)}" alt="" loading="lazy">${x.type === 'video' ? '<span class="mplay">Video</span>' : ''}</button>
+      <div class="minfo"><b title="${esc(x.publicId)}">${esc(name)}</b><span>${fmtBytes(x.bytes)} · ${fmtDate(x.createdAt)}</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:6px">${u ? `<span class="pill p-good" title="${esc(u.join(', '))}">In use</span>` : '<span class="pill p-mute">Unused</span>'}<button class="btn btn-sm btn-danger" data-a="mdel1" data-id="${esc(k)}">Delete</button></div></div></div>`; }).join('');
+  const n = m.sel.size;
+  return `<div class="page-head"><div><h1>Media library</h1><p>Everything stored in Cloudinary. Preview or delete files.</p></div>
+    <div class="toolbar"><button class="btn" data-a="mall">${n === m.items.length && n ? 'Clear selection' : 'Select all loaded'}</button><button class="btn btn-danger" data-a="mdeln" ${n ? '' : 'disabled'}>Delete selected${n ? ' (' + n + ')' : ''}</button></div></div>
+  ${demoOn() ? '<div class="banner info">Sample files. Connect Cloudinary in Settings, Integrations to see your real library.</div>' : ''}
+  ${m.err ? `<div class="banner warn">${esc(m.err)}</div>` : ''}
+  <div class="toolbar">${chips}<span style="color:var(--mute);margin-left:auto">${m.loaded ? m.total + ' file' + (m.total === 1 ? '' : 's') : ''}</span></div>
+  ${m.items.length ? `<div class="mgrid">${tiles}</div>` : `<div class="card empty"><b>${m.loading ? 'Loading…' : 'No files'}</b>${m.loading ? '' : 'Nothing found for this filter.'}</div>`}
+  ${m.cursor ? `<div style="text-align:center"><button class="btn" data-a="mmore" ${m.loading ? 'disabled' : ''}>${m.loading ? 'Loading…' : 'Load more'}</button></div>` : ''}`;
+}
+function previewMedia(k) {
+  const x = state.media.items.find(i => mkey(i) === k); if (!x) return;
+  const o = overlay(`<div class="modal" style="max-width:760px"><div style="display:flex;justify-content:space-between;gap:12px"><h3 style="overflow-wrap:anywhere">${esc(x.publicId)}</h3><button class="btn btn-sm" id="pv-x">Close</button></div>
+    ${x.type === 'video' && !x.sample ? `<video src="${esc(x.url)}" controls autoplay style="width:100%;max-height:60vh;background:#000;border-radius:8px"></video>` : `<img src="${esc(x.url)}" alt="" style="width:100%;max-height:60vh;object-fit:contain;background:var(--raise);border-radius:8px">`}
+    <p style="color:var(--mute);font-size:12px;overflow-wrap:anywhere">${fmtBytes(x.bytes)} · ${fmtDate(x.createdAt)}<br>${esc(x.url.startsWith('data:') ? 'Sample file' : x.url)}</p></div>`);
+  o.onclick = e => { if (e.target === o || e.target.id === 'pv-x') o.remove(); };
 }
 async function loadUsage() {
   if (state.usageBusy) return; state.usageBusy = true; state.usage = { loading: true };
@@ -331,7 +408,7 @@ function usageCard() {
 /* ================= shell ================= */
 const NAV = [
   { group: 'Overview', items: [{ key: 'dashboard', label: 'Dashboard', icon: 'home', href: '#/dashboard' }] },
-  { group: 'Catalog', items: [{ key: 'products', label: 'Products', icon: 'box', href: '#/products', subs: [['All products', '#/products', 'products'], ['Add product', '#/products/new', 'products/new']] }] },
+  { group: 'Catalog', items: [{ key: 'media', label: 'Media library', icon: 'img', href: '#/media' }, { key: 'products', label: 'Products', icon: 'box', href: '#/products', subs: [['All products', '#/products', 'products'], ['Add product', '#/products/new', 'products/new']] }] },
   { group: 'Configuration', items: [{ key: 'settings', label: 'Settings', icon: 'gear', href: '#/settings/branding', subs: [['Branding', '#/settings/branding', 'settings/branding'], ['Company', '#/settings/company', 'settings/company'], ['Integrations', '#/settings/integrations', 'settings/integrations']] }] }
 ];
 const routeParts = () => { const p = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean); return p.length ? p : ['dashboard']; };
@@ -347,14 +424,14 @@ function sidebar() {
       ${(i.subs || []).map(([l, h, k]) => `<a href="${h}" class="sub ${key === k || (k === 'products' && key === 'products/edit') ? 'on' : ''}">${l}</a>`).join('')}`).join('')}`).join('')}</nav>
     <div class="side-foot">${DEMO ? 'Demo mode: changes are not saved' : 'Connected to Firebase'}</div></aside>`;
 }
-const CRUMB = { dashboard: ['Dashboard'], products: ['Products', 'All products'], 'products/new': ['Products', 'Add product'], 'products/edit': ['Products', 'Edit product'], 'settings/branding': ['Settings', 'Branding'], 'settings/company': ['Settings', 'Company'], 'settings/integrations': ['Settings', 'Integrations'] };
+const CRUMB = { media: ['Catalog', 'Media library'], dashboard: ['Dashboard'], products: ['Products', 'All products'], 'products/new': ['Products', 'Add product'], 'products/edit': ['Products', 'Edit product'], 'settings/branding': ['Settings', 'Branding'], 'settings/company': ['Settings', 'Company'], 'settings/integrations': ['Settings', 'Integrations'] };
 
 function shell(view) {
   const c = CRUMB[routeKey()] || ['Dashboard'], u = state.user.email || '';
   return `<div class="app">${sidebar()}<div class="main">
     <header class="top"><div class="crumbs"><button class="btn btn-sm menu-btn" data-a="menu" aria-label="Open menu">${ic('menu')}</button>${c.map((x, i) => i === c.length - 1 ? `<b>${x}</b>` : `<span>${x}</span><span>/</span>`).join('')}</div>
       <div class="user"><span style="color:var(--mute);font-size:13px">${esc(u)}</span><div class="avatar">${esc((u[0] || 'A').toUpperCase())}</div><button class="btn btn-sm" data-a="logout">Sign out</button></div></header>
-    <main class="view" id="view">${view}</main></div></div>`;
+    <main class="view" id="view">${DEMO ? '<div class="banner warn"><div><b>Demo mode.</b> Nothing is saved to Firebase. Open this page from http://localhost or your Firebase Hosting address, then sign in, to save real data.</div></div>' : ''}${view}</main></div></div>`;
 }
 
 function loginView(err) {
@@ -505,7 +582,7 @@ function viewIntegrations() {
   <form class="card" id="iform" style="max-width:760px" novalidate><div class="card-h"><div><h2>Cloudinary</h2><p>When set, product media and the logo upload to Cloudinary. Otherwise they go to Firebase Storage.</p></div></div><div class="card-b" style="display:flex;flex-direction:column;gap:16px">
     <div class="grid2"><div class="field"><label for="i-cloud">Cloud name</label><input id="i-cloud" type="text" value="${esc(s.cloudName)}" autocomplete="off"><small>Cloudinary dashboard, top left.</small></div>
       <div class="field"><label for="i-preset">Unsigned upload preset</label><input id="i-preset" type="text" value="${esc(s.uploadPreset)}" autocomplete="off"><small>Settings, Upload, Add upload preset, Signing mode: Unsigned.</small></div></div>
-    <div class="field"><label for="i-usage">Usage endpoint URL</label><input id="i-usage" type="text" value="${esc(s.usageUrl)}" placeholder="https://...cloudfunctions.net/cloudinaryUsage" autocomplete="off"><small>Printed by <span class="mono">firebase deploy</span> for the cloudinaryUsage function. Never put the API secret in this page.</small></div>
+    <div class="field"><label for="i-usage">Cloudinary function URL</label><input id="i-usage" type="text" value="${esc(s.usageUrl)}" placeholder="https://cloudinaryapi-xxxx.a.run.app" autocomplete="off"><small>Printed by <span class="mono">firebase deploy</span> for the cloudinaryApi function. It powers usage numbers and the Media library. Never put the API secret in this page.</small></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" type="submit">Save</button><button class="btn" type="button" data-a="tests">Run connection tests</button></div></div></form>
   <div class="card" style="max-width:760px"><div class="card-h"><h2>Test results</h2></div><div class="card-b" id="tests"><span style="color:var(--mute)">Save your settings, then run the tests.</span></div></div>`;
 }
@@ -531,9 +608,10 @@ function render() {
     if (!key.startsWith('settings/branding')) L = null;
     const err = state.error ? `<div class="banner bad"><div><b>Could not reach Firebase.</b> ${esc(state.error)}<br>Check that Authentication, Firestore and Storage are enabled and the rules in this repo are deployed.</div></div>` : '';
     if (key === 'products/new' || key === 'products/edit') { if (!F || F.key !== location.hash) initForm(); view = viewForm(); }
-    else view = err + ({ dashboard: viewDashboard, products: viewProducts, 'settings/branding': viewBranding, 'settings/company': viewCompany, 'settings/integrations': viewIntegrations }[key] || viewDashboard)();
+    else view = err + ({ dashboard: viewDashboard, products: viewProducts, 'settings/branding': viewBranding, 'settings/company': viewCompany, 'settings/integrations': viewIntegrations, media: viewMedia }[key] || viewDashboard)();
   }
-  if (key === 'dashboard' && state.loaded && !state.usage) loadUsage();
+  if (key === 'dashboard' && state.loaded && !state.usage) setTimeout(loadUsage, 0);
+  if (key === 'media' && state.loaded && !state.media.loaded && !state.media.loading) setTimeout(() => loadMedia(true), 0);
   const y = window.scrollY; root.innerHTML = shell(view); window.scrollTo(0, y);
 }
 
@@ -624,7 +702,7 @@ async function saveLogo() {
     if (L.item?.file) {
       const f = L.item.file, [r] = await runUploads([{ file: f, path: `branding/logo-${Date.now()}-${safeName(f.name)}` }], 'Uploading logo');
       if (s.logoPath) B.removeFile(s.logoPath);
-      s.logoUrl = r.url; s.logoPath = r.path || '';
+      s.logoUrl = r.url; s.logoPath = r.path || ''; s.logoPublicId = r.publicId || '';
     } else if (L.removedFlag) { if (s.logoPath) B.removeFile(s.logoPath); s.logoUrl = ''; s.logoPath = ''; }
     await B.saveSettings(s); state.settings = s; L = null; toast('Logo saved'); render();
   } catch (e) { toast('Logo save failed: ' + (e.code || e.message), true); }
@@ -652,6 +730,13 @@ document.addEventListener('click', async e => {
     } catch (er) { toast('Delete failed: ' + (er.code || er.message), true); }
   }
   else if (a === 'savelogo') saveLogo();
+  else if (a === 'mtype') { state.media.type = b.dataset.t; loadMedia(true); }
+  else if (a === 'mmore') loadMedia(false);
+  else if (a === 'msel') { const m = state.media; m.sel.has(b.dataset.id) ? m.sel.delete(b.dataset.id) : m.sel.add(b.dataset.id); render(); }
+  else if (a === 'mall') { const m = state.media; if (m.sel.size === m.items.length) m.sel.clear(); else m.items.forEach(x => m.sel.add(mkey(x))); render(); }
+  else if (a === 'mview') previewMedia(b.dataset.id);
+  else if (a === 'mdel1') deleteMedia([b.dataset.id]);
+  else if (a === 'mdeln') deleteMedia([...state.media.sel]);
   else if (a === 'usage') { state.usage = null; loadUsage(); render(); }
   else if (a === 'tests') runTests(b);
   else if (a === 'rmlogo') { if (L.item?.path) { /* removed on save */ } L.item = null; L.removedFlag = true; render(); }
