@@ -17,9 +17,10 @@ Data layout: Firestore `products/{id}`, `settings/company`; files in Storage und
 
 ## Cloudinary
 
-- Uploads: in the console open Settings > Integrations, enter the Cloudinary **cloud name** and an **unsigned upload preset**. Media then uploads to Cloudinary; links are saved in Firestore.
-- Usage (storage, credits, video count) and the Media library: deploy `functions/` (`cd functions && npm i`, then
-  `firebase functions:secrets:set CLOUDINARY_API_SECRET`, `firebase deploy --only functions`; it asks for the cloud name and API key).
-  Paste the printed `cloudinaryApi` URL into Integrations. The API secret lives only in the function, never in the page.
-- Settings > Integrations > "Run connection tests" checks Firestore, Storage, Cloudinary upload and usage.
+- **Uploads:** create an unsigned upload preset named `dashboard_unsigned` (Cloudinary Settings > Upload > Upload presets). The cloud name is in `admin/firebase-config.js`.
+- **Media library and usage numbers:** run the local helper, which keeps the API secret on your computer:
+  1. `cp server/.env.example server/.env` and fill in `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET`.
+  2. `node server/cloudinary-server.js` (Node 18+). Leave it running and open the console.
+- Settings > Integrations > "Run connection tests" checks the database, Cloudinary upload and the helper.
+- The `functions/` folder is an alternative for hosting the same helper on Firebase (needs the Blaze plan).
 - Rebuild the single-file version with `python3 build-standalone.py`.

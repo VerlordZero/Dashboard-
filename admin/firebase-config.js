@@ -11,5 +11,6 @@ export const firebaseConfig = {
   // Optional defaults for Cloudinary uploads (not secret). Can also be set in Settings, Integrations.
   cloudName: "e956iksj",
   uploadPreset: "dashboard_unsigned",
+  functionUrl: "http://localhost:8787", // local helper: node server/cloudinary-server.js
   measurementId: "G-EMYJEQHNKF"
 };

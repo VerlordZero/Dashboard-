@@ -180,10 +180,11 @@ function cloudUpload(file, folder, onP) {
 }
 const uploadAny = (path, file, onP) => cloudOn() ? cloudUpload(file, path.split('/').slice(0, -1).join('/'), onP) : B.upload(path, file, onP);
 async function cloudApi(action, params = {}, body) {
-  const base = (state.settings.usageUrl || '').trim();
-  if (!base) throw new Error('Function URL not set. Deploy the function and paste its URL in Settings, Integrations.');
+  const base = (state.settings.usageUrl || firebaseConfig.functionUrl || '').trim();
+  if (!base) throw new Error('Cloudinary helper address not set. See Settings, Integrations.');
   const url = base + (base.includes('?') ? '&' : '?') + new URLSearchParams({ action, ...params });
-  const r = await fetch(url, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + await B.getToken(), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(url, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + await B.getToken(), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined })
+    .catch(() => { throw new Error(`Cannot reach the Cloudinary helper at ${base}. Start it with: node server/cloudinary-server.js`); });
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j;
 }
 async function fetchCloudUsage() {
@@ -438,7 +439,7 @@ function viewIntegrations() {
   <form class="card" id="iform" style="max-width:760px" novalidate><div class="card-h"><div><h2>Cloudinary</h2><p>When set, product media and the logo upload to Cloudinary. Otherwise they go to Firebase Storage.</p></div></div><div class="card-b" style="display:flex;flex-direction:column;gap:16px">
     <div class="grid2"><div class="field"><label for="i-cloud">Cloud name</label><input id="i-cloud" type="text" value="${esc(s.cloudName)}" autocomplete="off"><small>Cloudinary dashboard, top left.</small></div>
       <div class="field"><label for="i-preset">Unsigned upload preset</label><input id="i-preset" type="text" value="${esc(s.uploadPreset)}" autocomplete="off"><small>Settings, Upload, Add upload preset, Signing mode: Unsigned.</small></div></div>
-    <div class="field"><label for="i-usage">Cloudinary function URL</label><input id="i-usage" type="text" value="${esc(s.usageUrl)}" placeholder="https://cloudinaryapi-xxxx.a.run.app" autocomplete="off"><small>Printed by <span class="mono">firebase deploy</span> for the cloudinaryApi function. It powers usage numbers and the Media library. Never put the API secret in this page.</small></div>
+    <div class="field"><label for="i-usage">Cloudinary helper address</label><input id="i-usage" type="text" value="${esc(s.usageUrl)}" placeholder="http://localhost:8787 (default)" autocomplete="off"><small>Leave empty to use the local helper at http://localhost:8787 (<span class="mono">node server/cloudinary-server.js</span>). It powers usage numbers and the Media library. Never put the API secret in this page.</small></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" type="submit">Save</button><button class="btn" type="button" data-a="tests">Run connection tests</button></div></div></form>
   <div class="card" style="max-width:760px"><div class="card-h"><h2>Test results</h2></div><div class="card-b" id="tests"><span style="color:var(--mute)">Save your settings, then run the tests.</span></div></div>`;
 }
