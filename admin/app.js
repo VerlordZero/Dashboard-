@@ -430,7 +430,8 @@ function render() {
 
 /* ================= actions ================= */
 async function loadAll() {
-  try { [state.settings, state.products] = await Promise.all([B.getSettings().then(s => ({ currency: 'INR', ...s })), B.listProducts()]); state.error = ''; }
+  const slow = new Promise((_, rej) => setTimeout(() => rej(new Error('Firestore did not answer in 15 seconds. An ad blocker or privacy extension (net::ERR_BLOCKED_BY_CLIENT in the browser console) may be blocking firestore.googleapis.com. Turn it off for this page or use an Incognito window.')), 15000));
+  try { [state.settings, state.products] = await Promise.race([Promise.all([B.getSettings().then(s => ({ currency: 'INR', ...s })), B.listProducts()]), slow]); state.error = ''; }
   catch (e) { state.error = e.message || String(e); }
   state.loaded = true; render();
 }
