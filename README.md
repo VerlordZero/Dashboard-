@@ -18,8 +18,11 @@ Data layout: Firestore `products/{id}`, `settings/company`; files in Storage und
 ## Cloudinary
 
 - **Uploads:** create an unsigned upload preset named `dashboard_unsigned` (Cloudinary Settings > Upload > Upload presets). The cloud name is in `admin/firebase-config.js`.
-- **Media library and usage numbers:** run the local helper, which keeps the API secret on your computer:
-  1. Double-click `server/start-helper.bat` (or run `node server/cloudinary-server.js`). The first time it asks for your API key and secret and saves them in `server/.env` on your computer.
+- **Media library and usage numbers (hosted on Netlify, nothing to run for teammates):**
+  1. Netlify > Add new site > Import from GitHub > pick this repo and branch. `netlify.toml` sets the publish folder (`admin`) and the function.
+  2. Site configuration > Environment variables: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `ADMIN_CODE` (any shared code for your team). Redeploy.
+  3. Each person opens Settings > Integrations once and types the access code.
+- **Local alternative** (when working from a file): double-click `server/start-helper.bat` or run `node server/cloudinary-server.js`.
 - Settings > Integrations > "Run connection tests" checks the database, Cloudinary upload and the helper.
-- The `functions/` folder is an alternative for hosting the same helper on Firebase (needs the Blaze plan).
+- `functions/` is an older Firebase version of the same function and is not needed with Netlify.
 - Rebuild the single-file version with `python3 build-standalone.py`.

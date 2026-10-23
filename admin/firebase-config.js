@@ -11,6 +11,6 @@ export const firebaseConfig = {
   // Optional defaults for Cloudinary uploads (not secret). Can also be set in Settings, Integrations.
   cloudName: "e956iksj",
   uploadPreset: "dashboard_unsigned",
-  functionUrl: "http://localhost:8787", // local helper: node server/cloudinary-server.js
+  functionUrl: "/.netlify/functions/cloudinary", // Netlify function (falls back to the local helper when opened as a file)
   measurementId: "G-EMYJEQHNKF"
 };

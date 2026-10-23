@@ -188,7 +188,7 @@ const firebaseConfig = {
   // Optional defaults for Cloudinary uploads (not secret). Can also be set in Settings, Integrations.
   cloudName: "e956iksj",
   uploadPreset: "dashboard_unsigned",
-  functionUrl: "http://localhost:8787", // local helper: node server/cloudinary-server.js
+  functionUrl: "/.netlify/functions/cloudinary", // Netlify function (falls back to the local helper when opened as a file)
   measurementId: "G-EMYJEQHNKF"
 };
 
@@ -371,11 +371,13 @@ function cloudUpload(file, folder, onP) {
   });
 }
 const uploadAny = (path, file, onP) => cloudOn() ? cloudUpload(file, path.split('/').slice(0, -1).join('/'), onP) : B.upload(path, file, onP);
+const adminCode = () => { try { return localStorage.getItem('adminCode') || ''; } catch (e) { return ''; } };
 async function cloudApi(action, params = {}, body) {
-  const base = (state.settings.usageUrl || firebaseConfig.functionUrl || '').trim();
+  let base = (state.settings.usageUrl || firebaseConfig.functionUrl || '').trim();
+  if (base.startsWith('/') && location.protocol === 'file:') base = 'http://localhost:8787'; // opened from a file: use the local helper
   if (!base) throw new Error('Cloudinary helper address not set. See Settings, Integrations.');
   const url = base + (base.includes('?') ? '&' : '?') + new URLSearchParams({ action, ...params });
-  const r = await fetch(url, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + await B.getToken(), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined })
+  const r = await fetch(url, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + await B.getToken(), 'X-Admin-Code': adminCode(), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined })
     .catch(() => { throw new Error(`Cannot reach the Cloudinary helper at ${base}. Start it with: node server/cloudinary-server.js`); });
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j;
 }
@@ -632,6 +634,7 @@ function viewIntegrations() {
     <div class="grid2"><div class="field"><label for="i-cloud">Cloud name</label><input id="i-cloud" type="text" value="${esc(s.cloudName)}" autocomplete="off"><small>Cloudinary dashboard, top left.</small></div>
       <div class="field"><label for="i-preset">Unsigned upload preset</label><input id="i-preset" type="text" value="${esc(s.uploadPreset)}" autocomplete="off"><small>Settings, Upload, Add upload preset, Signing mode: Unsigned.</small></div></div>
     <div class="field"><label for="i-usage">Cloudinary helper address</label><input id="i-usage" type="text" value="${esc(s.usageUrl)}" placeholder="http://localhost:8787 (default)" autocomplete="off"><small>Leave empty to use the local helper at http://localhost:8787 (<span class="mono">node server/cloudinary-server.js</span>). It powers usage numbers and the Media library. Never put the API secret in this page.</small></div>
+    <div class="field" style="max-width:320px"><label for="i-code">Team access code</label><input id="i-code" type="password" value="${esc(adminCode())}" autocomplete="off"><small>Needed for the Media library and usage when the site runs on Netlify. Saved in this browser only.</small></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" type="submit">Save</button><button class="btn" type="button" data-a="tests">Run connection tests</button></div></div></form>
   <div class="card" style="max-width:760px"><div class="card-h"><h2>Test results</h2></div><div class="card-b" id="tests"><span style="color:var(--mute)">Save your settings, then run the tests.</span></div></div>`;
 }
@@ -789,6 +792,7 @@ document.addEventListener('submit', e => {
   if (e.target.id === 'iform') {
     e.preventDefault();
     const s = { ...state.settings, cloudName: $('#i-cloud').value.trim(), uploadPreset: $('#i-preset').value.trim(), usageUrl: $('#i-usage').value.trim() };
+    try { localStorage.setItem('adminCode', $('#i-code').value); } catch (er) {}
     B.saveSettings(s).then(() => { state.settings = s; state.usage = null; toast('Integrations saved'); }).catch(er => toast('Save failed: ' + (er.code || er.message), true));
   }
   if (e.target.id === 'cform') {
