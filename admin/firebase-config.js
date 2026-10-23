@@ -17,14 +17,14 @@ export const firebaseConfig = {
 };
 
 /* ---------- CLOUDINARY (images and videos) ----------
-   DEMO: the API key and API SECRET are in this file, so anyone who can open the page can read them.
-   TODO before launch: remove apiKey/apiSecret from here, keep them on a server (Supabase Edge Function,
-   Netlify function), and regenerate the secret in Cloudinary > API Keys. */
+   Uploads use the unsigned preset below (no secret). Listing and deleting go through the helper in server/,
+   because Cloudinary blocks browsers from calling its admin service.
+   DEMO: the API key and SECRET are written in plain text in server/cloudinary-server.js.
+   TODO before launch: move them to a real server secret (Supabase Edge Function, Netlify function)
+   and regenerate the secret in Cloudinary > API Keys. */
 export const cloudinaryConfig = {
   cloudName: "e956iksj",
   uploadPreset: "dashboard_unsigned",
-  apiKey: "564552812816849",
-  apiSecret: "8QfFh8me0sn9dyFoH-S5-VCG_zU",
-  // Used only if direct browser calls to Cloudinary are blocked. Local helper: node server/cloudinary-server.js
+  // The local helper is at http://localhost:8787 (start it with server/start-helper.bat).
   functionUrl: "/.netlify/functions/cloudinary"
 };

@@ -22,7 +22,7 @@ Data layout: Firestore `products/{id}`, `settings/company`; files in Storage und
   1. Netlify > Add new site > Import from GitHub > pick this repo and branch. `netlify.toml` sets the publish folder (`admin`) and the function.
   2. Site configuration > Environment variables: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `ADMIN_CODE` (any shared code for your team). Redeploy.
   3. Each person opens Settings > Integrations once and types the access code.
-- **Local alternative** (when working from a file): double-click `server/start-helper.bat` or run `node server/cloudinary-server.js`.
+- **Local (what you use now):** double-click `server/start-helper.bat`. It serves the console at http://localhost:8787 and talks to Cloudinary for the Media library and usage.
 - Settings > Integrations > "Run connection tests" checks the database, Cloudinary upload and the helper.
 - `functions/` is an older Firebase version of the same function and is not needed with Netlify.
 - Rebuild the single-file version with `python3 build-standalone.py`.

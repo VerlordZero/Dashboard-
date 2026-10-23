@@ -1,5 +1,5 @@
-// Local helper for the admin console: lists, counts and deletes Cloudinary files.
-// Keeps your API secret on your own computer. Run:  node server/cloudinary-server.js
+// Local helper for the admin console: lists, counts and deletes Cloudinary files, and serves the console.
+// Run:  node server/cloudinary-server.js   then open http://localhost:8787
 // Needs Node 18 or newer. No packages to install.
 const http = require('http'), fs = require('fs'), path = require('path');
 
@@ -11,10 +11,19 @@ try {
   });
 } catch (e) {}
 const CLOUD = process.env.CLOUDINARY_CLOUD_NAME || 'e956iksj';
-let KEY = process.env.CLOUDINARY_API_KEY, SECRET = process.env.CLOUDINARY_API_SECRET;
+// DEMO: keys written here so nothing has to be typed. NOT SECURE. Move to a real server secret before launch.
+let KEY = process.env.CLOUDINARY_API_KEY || '564552812816849', SECRET = process.env.CLOUDINARY_API_SECRET || '8QfFh8me0sn9dyFoH-S5-VCG_zU';
 const PORT = +process.env.PORT || 8787;
 const API = process.env.CLOUDINARY_API_BASE || 'https://api.cloudinary.com';
 let handleRequest = null; // built once the key and secret are known
+
+// Serves ../admin so http://localhost:PORT opens the console.
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };
+function serveFile(pathname, res) {
+  const root = path.join(__dirname, '..', 'admin'), file = path.join(root, pathname === '/' ? 'index.html' : decodeURIComponent(pathname));
+  if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end('Not found'); }
+  res.writeHead(200, { 'Content-Type': (TYPES[path.extname(file)] || 'application/octet-stream') + '; charset=utf-8' }); fs.createReadStream(file).pipe(res);
+}
 
 // Only pages opened from this computer (file:// or localhost) may call the helper.
 const allowed = o => !o || o === 'null' || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o);
@@ -26,8 +35,10 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Private-Network', 'true');
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+  const url = new URL(req.url, 'http://x');
+  if (req.method === 'GET' && !url.searchParams.has('action')) return serveFile(url.pathname, res); // the console itself
   let raw = ''; for await (const c of req) raw += c;
-  try { send(200, await handleRequest(new URL(req.url, 'http://x').searchParams, req.method, raw ? JSON.parse(raw) : {})); }
+  try { send(200, await handleRequest(url.searchParams, req.method, raw ? JSON.parse(raw) : {})); }
   catch (e) { send(e.status || 500, { error: e.message }); }
 });
 
