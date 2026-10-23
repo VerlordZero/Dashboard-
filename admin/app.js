@@ -3,7 +3,7 @@ import { firebaseConfig } from './firebase-config.js';
 /* ================= helpers ================= */
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const DEMO = new URLSearchParams(location.search).has('demo');
+const DEMO = new URLSearchParams(location.search).has('demo') || location.protocol === 'file:';
 const CUR = { INR: '₹', USD: '$', EUR: '€', GBP: '£', AED: 'AED ' };
 const MAX_IMG = 5 * 1024 * 1024, MAX_VID = 100 * 1024 * 1024, MAX_GALLERY = 5;
 const money = n => (CUR[state.settings.currency] || '₹') + Number(n || 0).toLocaleString('en-IN');

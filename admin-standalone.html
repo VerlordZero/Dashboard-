@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0e2236; --ink-2:#17304a; --ink-line:#25415e; --ink-fg:#e6edf5; --ink-mute:#93a8bf;
+  --bg:#f3f5f8; --surface:#fff; --raise:#eef2f6; --line:#dbe2ea; --fg:#16202b; --mute:#5b6a7a;
+  --accent:#0b5cab; --accent-fg:#fff; --soft:#e2edf9;
+  --good:#17703a; --goodbg:#dff3e5; --warn:#8a5200; --warnbg:#fbeccb; --bad:#b0231a; --badbg:#fbe1dd;
+  --radius:10px; --side:252px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:14px/1.5 'Public Sans',system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+h1,h2,h3,p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+
+/* shell */
+.app{display:grid;grid-template-columns:var(--side) 1fr;min-height:100%}
+.side{background:var(--ink);color:var(--ink-fg);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:12px;padding:20px 20px 18px;border-bottom:1px solid var(--ink-line)}
+.brand-logo{width:38px;height:38px;border-radius:8px;background:var(--ink-2);display:grid;place-items:center;overflow:hidden;flex:none;font-weight:700;font-size:16px}
+.brand-logo img{width:100%;height:100%;object-fit:contain;background:#fff}
+.brand b{display:block;font-size:15px;line-height:1.2;overflow-wrap:anywhere}
+.brand span{font-size:12px;color:var(--ink-mute)}
+.nav{padding:12px;display:flex;flex-direction:column;gap:2px;flex:1}
+.nav-group{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-mute);padding:14px 10px 6px;font-weight:600}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--ink-fg);text-decoration:none;font-weight:500}
+.nav a:hover{background:var(--ink-2)}
+.nav a.on{background:var(--accent);color:#fff}
+.nav a.sub{margin-left:20px;padding-left:20px;font-size:13px;color:var(--ink-mute);border-left:1px solid var(--ink-line);border-radius:0 8px 8px 0;font-weight:400}
+.nav a.sub.on{background:var(--ink-2);color:#fff;border-left-color:var(--accent)}
+.nav svg,.ic{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.side-foot{padding:14px 20px;border-top:1px solid var(--ink-line);font-size:12px;color:var(--ink-mute)}
+.main{min-width:0;display:flex;flex-direction:column}
+.top{height:60px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 28px;position:sticky;top:0;z-index:10}
+.crumbs{color:var(--mute);font-size:13px;display:flex;gap:8px;align-items:center}
+.crumbs b{color:var(--fg);font-weight:600}
+.user{display:flex;align-items:center;gap:12px}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--soft);color:var(--accent);display:grid;place-items:center;font-weight:700;font-size:13px}
+.btn.menu-btn{display:none}
+.view{padding:28px;max-width:1240px;width:100%;margin-inline:auto;display:flex;flex-direction:column;gap:22px}
+.page-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.page-head h1{font-size:24px;font-weight:700;letter-spacing:-.01em}
+.page-head p{color:var(--mute);margin-top:2px}
+
+/* components */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.card-h{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.card-h h2{font-size:15px;font-weight:600}
+.card-h p{color:var(--mute);font-size:13px}
+.card-b{padding:20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:38px;padding:0 16px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:13px;cursor:pointer;text-decoration:none;color:var(--fg)}
+.btn:hover{background:var(--raise)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn-primary:hover{background:#094f94}
+.btn-danger{color:var(--bad)}
+.btn-sm{min-height:30px;padding:0 10px;font-size:12px}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.kpi{padding:18px 20px}
+.kpi .l{font-size:12px;color:var(--mute);font-weight:600;text-transform:uppercase;letter-spacing:.07em}
+.kpi .v{font-size:30px;font-weight:700;margin-top:4px;letter-spacing:-.02em}
+.kpi .s{font-size:12px;color:var(--mute)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-good{background:var(--goodbg);color:var(--good)} .p-warn{background:var(--warnbg);color:var(--warn)} .p-mute{background:var(--raise);color:var(--mute)} .p-bad{background:var(--badbg);color:var(--bad)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);text-align:left;padding:10px 20px;background:var(--raise);font-weight:600;white-space:nowrap}
+td{padding:12px 20px;border-top:1px solid var(--line);vertical-align:middle}
+tr:hover td{background:#f9fafc}
+td.r,th.r{text-align:right}
+.thumb{width:44px;height:44px;border-radius:8px;background:var(--raise);object-fit:cover;display:grid;place-items:center;color:var(--mute);flex:none;overflow:hidden}
+.cell{display:flex;align-items:center;gap:12px;min-width:0}
+.cell b{display:block;font-weight:600}
+.cell span{color:var(--mute);font-size:12px}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field>label:not(.drop),.lbl{font-size:12px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.05em}
+.field small{color:var(--mute);font-size:12px}
+input[type=text],input[type=email],input[type=password],input[type=number],input[type=search],select,textarea{width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+textarea{resize:vertical;min-height:84px}
+input.bad,select.bad{border-color:var(--bad)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.form-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:22px;align-items:start}
+.stack{display:flex;flex-direction:column;gap:22px;min-width:0}
+.plan{border:1px solid var(--line);border-radius:var(--radius);padding:16px;background:var(--surface)}
+.plan-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.plan-h b{font-size:13px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+.plan-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.plan-grid .w2{grid-column:span 2}
+.disc{background:var(--goodbg);color:var(--good);border-radius:8px;padding:8px 12px;min-height:40px;display:flex;align-items:center;font-weight:600;font-size:13px}
+.disc.none{background:var(--raise);color:var(--mute);font-weight:500}
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;border:1.5px dashed #b6c3d1;border-radius:var(--radius);padding:18px;cursor:pointer;color:var(--mute);background:#fafbfd;min-height:120px}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--soft);color:var(--accent)}
+.drop input{display:none}
+.media{position:relative;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);background:var(--raise)}
+.media img,.media video{display:block;width:100%;height:160px;object-fit:cover}
+.media.contain img{object-fit:contain;background:#fff}
+.media .x{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(14,34,54,.8);color:#fff;cursor:pointer;display:grid;place-items:center}
+.media .x svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round}
+.media .tag{position:absolute;left:8px;bottom:8px;background:rgba(14,34,54,.8);color:#fff;font-size:11px;padding:1px 8px;border-radius:99px}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
+.gallery .media img{height:110px}
+.gallery .drop{min-height:110px;padding:8px;font-size:12px}
+.banner{padding:12px 16px;border-radius:8px;font-size:13px;display:flex;gap:10px;align-items:flex-start}
+.banner.bad{background:var(--badbg);color:var(--bad)} .banner.warn{background:var(--warnbg);color:var(--warn)} .banner.info{background:var(--soft);color:var(--accent)}
+.banner ul{margin:4px 0 0;padding-left:18px}
+.check{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.check:first-child{border-top:0}
+.dot{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;flex:none;background:var(--raise);color:var(--mute)}
+.dot.ok{background:var(--goodbg);color:var(--good)}
+.dot svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.5}
+.empty{padding:48px 20px;text-align:center;color:var(--mute)}
+.empty b{display:block;color:var(--fg);font-size:15px;margin-bottom:4px}
+.logo-prev{width:132px;height:132px;border:1px solid var(--line);border-radius:var(--radius);background:#fff;display:grid;place-items:center;overflow:hidden;color:var(--mute);font-size:12px;text-align:center;flex:none}
+.logo-prev img{width:100%;height:100%;object-fit:contain}
+.row{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+.sticky-bar{position:sticky;bottom:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;display:flex;justify-content:flex-end;gap:10px;align-items:center;box-shadow:0 -4px 16px rgba(14,34,54,.06)}
+
+/* overlays */
+.overlay{position:fixed;inset:0;background:rgba(14,34,54,.5);display:grid;place-items:center;z-index:50;padding:16px}
+.modal{background:var(--surface);border-radius:12px;padding:24px;width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px}
+.modal h3{font-size:17px}
+.modal .acts{display:flex;justify-content:flex-end;gap:10px}
+.prog{height:8px;border-radius:99px;background:var(--raise);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--accent);transition:width .15s}
+#toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:60}
+.toast{background:var(--ink);color:#fff;padding:11px 16px;border-radius:8px;font-weight:500;max-width:360px;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.toast.bad{background:var(--bad)}
+
+/* login */
+.login{min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--ink)}
+.login .card{width:100%;max-width:400px;padding:32px;display:flex;flex-direction:column;gap:18px}
+.login h1{font-size:22px}
+
+@media (max-width:1100px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.form-layout{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:860px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:fixed;left:0;top:0;bottom:0;width:var(--side);z-index:40;transform:translateX(-100%);transition:transform .2s}
+  .side.open{transform:none}
+  .btn.menu-btn{display:inline-flex}
+  .user>span{display:none}
+  .top{padding:0 16px}.view{padding:20px 16px}
+  .plan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.plan-grid .w2{grid-column:span 2}
+  .grid2,.grid3{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="toasts" aria-live="polite"></div>
+<script type="module">
+// Firebase web config. These values identify the project and are safe in client code;
+// access is protected by Firebase Auth plus firestore.rules and storage.rules.
+const firebaseConfig = {
+  apiKey: "AIzaSyAalTjSYreVdtfah0W-b-gQE6dvw9biniw",
+  authDomain: "dtarks-c75b8.firebaseapp.com",
+  projectId: "dtarks-c75b8",
+  storageBucket: "dtarks-c75b8.firebasestorage.app",
+  messagingSenderId: "469572538926",
+  appId: "1:469572538926:web:1329782782b44e9f4c05bf",
+  measurementId: "G-EMYJEQHNKF"
+};
+
+/* ================= helpers ================= */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const DEMO = new URLSearchParams(location.search).has('demo') || location.protocol === 'file:';
+const CUR = { INR: '₹', USD: '$', EUR: '€', GBP: '£', AED: 'AED ' };
+const MAX_IMG = 5 * 1024 * 1024, MAX_VID = 100 * 1024 * 1024, MAX_GALLERY = 5;
+const money = n => (CUR[state.settings.currency] || '₹') + Number(n || 0).toLocaleString('en-IN');
+const fmtDate = t => t ? new Date(t).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+const mb = b => (b / 1048576).toFixed(0);
+const safeName = n => n.toLowerCase().replace(/[^a-z0-9.]+/g, '-').slice(-40);
+
+function toast(msg, bad) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (bad ? ' bad' : ''); t.textContent = msg;
+  $('#toasts').append(t); setTimeout(() => t.remove(), 3600);
+}
+function overlay(html) {
+  const o = document.createElement('div'); o.className = 'overlay'; o.innerHTML = html; document.body.append(o); return o;
+}
+function confirmBox(title, text, okLabel) {
+  return new Promise(res => {
+    const o = overlay(`<div class="modal" role="dialog" aria-modal="true"><h3>${esc(title)}</h3><p style="color:var(--mute)">${esc(text)}</p>
+      <div class="acts"><button class="btn" id="c-no">Cancel</button><button class="btn btn-primary" id="c-ok" style="background:var(--bad);border-color:var(--bad)">${esc(okLabel)}</button></div></div>`);
+    $('#c-no', o).onclick = () => { o.remove(); res(false); };
+    $('#c-ok', o).onclick = () => { o.remove(); res(true); };
+  });
+}
+function progressBox(label) {
+  const o = overlay(`<div class="modal"><h3>${esc(label)}</h3><div class="prog"><i id="pb" style="width:0%"></i></div><p id="pt" style="color:var(--mute);font-size:13px">Starting…</p></div>`);
+  return { set(p, t) { $('#pb', o).style.width = p + '%'; if (t) $('#pt', o).textContent = t; }, close() { o.remove(); } };
+}
+
+const ICON = {
+  home: '<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  box: '<path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5zM3 7.5l9 4.5 9-4.5M12 12v9"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  check: '<path d="M5 12l5 5 9-10"/>',
+  img: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M21 16l-5-5-8 9"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>'
+};
+const ic = (n, cls = 'ic') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
+
+/* ================= backends ================= */
+async function firebaseBackend() {
+  const base = 'https://www.gstatic.com/firebasejs/10.14.1/';
+  const [{ initializeApp }, A, F, St] = await Promise.all(
+    ['app', 'auth', 'firestore', 'storage'].map(m => import(`${base}firebase-${m}.js`)));
+  const app = initializeApp(firebaseConfig);
+  const auth = A.getAuth(app), db = F.getFirestore(app), st = St.getStorage(app);
+  import(`${base}firebase-analytics.js`).then(m => m.isSupported().then(ok => ok && m.getAnalytics(app))).catch(() => {});
+  return {
+    onAuth: cb => A.onAuthStateChanged(auth, u => cb(u ? { email: u.email } : null)),
+    signIn: (e, p) => A.signInWithEmailAndPassword(auth, e, p),
+    signOut: () => A.signOut(auth),
+    newId: () => F.doc(F.collection(db, 'products')).id,
+    listProducts: async () => (await F.getDocs(F.collection(db, 'products'))).docs.map(d => ({ ...d.data(), id: d.id })),
+    saveProduct: p => F.setDoc(F.doc(db, 'products', p.id), p),
+    deleteProduct: id => F.deleteDoc(F.doc(db, 'products', id)),
+    getSettings: async () => { const s = await F.getDoc(F.doc(db, 'settings', 'company')); return s.exists() ? s.data() : {}; },
+    saveSettings: o => F.setDoc(F.doc(db, 'settings', 'company'), o),
+    upload: (path, file, onP) => new Promise((res, rej) => {
+      const r = St.ref(st, path), t = St.uploadBytesResumable(r, file, { contentType: file.type });
+      t.on('state_changed', s => onP(s.bytesTransferred, s.totalBytes), rej, async () => res({ url: await St.getDownloadURL(r), path }));
+    }),
+    removeFile: path => St.deleteObject(St.ref(st, path)).catch(() => {})
+  };
+}
+
+function demoBackend() {
+  // In-memory only: used with ?demo to preview the screens without touching Firebase.
+  let products = [
+    { id: 'd1', name: 'StockPilot Inventory', category: 'Software', status: 'published', shortDescription: 'Stock, purchase and sales tracking for small businesses.', description: '', thumbnail: null, mainImage: null, gallery: [], video: null, createdAt: Date.now() - 6e8, updatedAt: Date.now() - 2e8,
+      plans: [{ id: 'p1', name: 'Basic', users: 5, originalPrice: 799, sellingPrice: 599, extraUserPrice: 120 }, { id: 'p2', name: 'Standard', users: 30, originalPrice: 2499, sellingPrice: 1999, extraUserPrice: 90 }, { id: 'p3', name: 'ULTRA', users: 100, originalPrice: 999, sellingPrice: 999 - 100, extraUserPrice: 60 }] },
+    { id: 'd2', name: 'LeadLoop CRM', category: 'Software', status: 'draft', shortDescription: 'Pipeline and follow-up reminders for sales teams.', description: '', thumbnail: null, mainImage: null, gallery: [], video: null, createdAt: Date.now() - 3e8, updatedAt: Date.now() - 1e8,
+      plans: [{ id: 'p1', name: 'Basic', users: 5, originalPrice: 999, sellingPrice: 799, extraUserPrice: 150 }] }
+  ];
+  let settings = { companyName: 'Demo Company', supportEmail: '', website: '', currency: 'INR' };
+  let cb = () => {};
+  return {
+    onAuth: c => { cb = c; setTimeout(() => cb({ email: 'demo@example.com' }), 0); return () => {}; },
+    signIn: async () => cb({ email: 'demo@example.com' }), signOut: async () => cb(null),
+    newId: () => 'p' + Math.random().toString(36).slice(2, 10),
+    listProducts: async () => products.map(p => ({ ...p })),
+    saveProduct: async p => { products = products.filter(x => x.id !== p.id).concat([{ ...p }]); },
+    deleteProduct: async id => { products = products.filter(x => x.id !== id); },
+    getSettings: async () => ({ ...settings }), saveSettings: async o => { settings = { ...o }; },
+    upload: async (path, file, onP) => { onP(file.size / 2, file.size); await new Promise(r => setTimeout(r, 150)); onP(file.size, file.size); return { url: URL.createObjectURL(file), path }; },
+    removeFile: async () => {}
+  };
+}
+
+/* ================= state ================= */
+const state = { user: null, settings: { currency: 'INR' }, products: [], loaded: false, error: '', q: '', status: 'all', menu: false };
+let B = null, F = null, L = null; // backend, product form, logo form
+
+/* ================= shell ================= */
+const NAV = [
+  { group: 'Overview', items: [{ key: 'dashboard', label: 'Dashboard', icon: 'home', href: '#/dashboard' }] },
+  { group: 'Catalog', items: [{ key: 'products', label: 'Products', icon: 'box', href: '#/products', subs: [['All products', '#/products', 'products'], ['Add product', '#/products/new', 'products/new']] }] },
+  { group: 'Configuration', items: [{ key: 'settings', label: 'Settings', icon: 'gear', href: '#/settings/branding', subs: [['Branding', '#/settings/branding', 'settings/branding'], ['Company', '#/settings/company', 'settings/company']] }] }
+];
+const routeParts = () => { const p = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean); return p.length ? p : ['dashboard']; };
+const routeKey = () => { const [a, b] = routeParts(); return a === 'settings' ? 'settings/' + (b || 'branding') : a === 'products' && b === 'new' ? 'products/new' : a === 'products' && b === 'edit' ? 'products/edit' : a; };
+
+function sidebar() {
+  const key = routeKey(), top = key.split('/')[0], s = state.settings;
+  const logo = s.logoUrl ? `<img src="${esc(s.logoUrl)}" alt="">` : esc((s.companyName || 'C')[0].toUpperCase());
+  return `<aside class="side ${state.menu ? 'open' : ''}" id="side">
+    <div class="brand"><div class="brand-logo">${logo}</div><div><b>${esc(s.companyName || 'Your company')}</b><span>Admin console</span></div></div>
+    <nav class="nav" aria-label="Main">${NAV.map(g => `<div class="nav-group">${g.group}</div>${g.items.map(i => `
+      <a href="${i.href}" class="${top === i.key && !i.subs ? 'on' : ''}" ${top === i.key && !i.subs ? 'aria-current="page"' : ''}>${ic(i.icon)}${i.label}</a>
+      ${(i.subs || []).map(([l, h, k]) => `<a href="${h}" class="sub ${key === k || (k === 'products' && key === 'products/edit') ? 'on' : ''}">${l}</a>`).join('')}`).join('')}`).join('')}</nav>
+    <div class="side-foot">${DEMO ? 'Demo mode: changes are not saved' : 'Connected to Firebase'}</div></aside>`;
+}
+const CRUMB = { dashboard: ['Dashboard'], products: ['Products', 'All products'], 'products/new': ['Products', 'Add product'], 'products/edit': ['Products', 'Edit product'], 'settings/branding': ['Settings', 'Branding'], 'settings/company': ['Settings', 'Company'] };
+
+function shell(view) {
+  const c = CRUMB[routeKey()] || ['Dashboard'], u = state.user.email || '';
+  return `<div class="app">${sidebar()}<div class="main">
+    <header class="top"><div class="crumbs"><button class="btn btn-sm menu-btn" data-a="menu" aria-label="Open menu">${ic('menu')}</button>${c.map((x, i) => i === c.length - 1 ? `<b>${x}</b>` : `<span>${x}</span><span>/</span>`).join('')}</div>
+      <div class="user"><span style="color:var(--mute);font-size:13px">${esc(u)}</span><div class="avatar">${esc((u[0] || 'A').toUpperCase())}</div><button class="btn btn-sm" data-a="logout">Sign out</button></div></header>
+    <main class="view" id="view">${view}</main></div></div>`;
+}
+
+function loginView(err) {
+  return `<div class="login"><form class="card" id="login" novalidate>
+    <div><h1>Sign in</h1><p style="color:var(--mute)">Use the admin account created in Firebase Authentication.</p></div>
+    ${err ? `<div class="banner bad">${esc(err)}</div>` : ''}
+    <div class="field"><label for="em">Email</label><input id="em" type="email" autocomplete="username" required></div>
+    <div class="field"><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" required></div>
+    <button class="btn btn-primary" style="min-height:44px" type="submit">Sign in</button></form></div>`;
+}
+
+/* ================= views ================= */
+const lowest = p => (p.plans || []).reduce((m, x) => Math.min(m, +x.sellingPrice), Infinity);
+const statusPill = s => `<span class="pill ${s === 'published' ? 'p-good' : 'p-mute'}">${s === 'published' ? 'Published' : 'Draft'}</span>`;
+const thumbHtml = p => p.thumbnail?.url ? `<img class="thumb" src="${esc(p.thumbnail.url)}" alt="">` : `<div class="thumb">${ic('img')}</div>`;
+
+function viewDashboard() {
+  const ps = state.products, pub = ps.filter(p => p.status === 'published').length, plans = ps.reduce((a, p) => a + (p.plans || []).length, 0), s = state.settings;
+  const checks = [
+    [!DEMO && !state.error, 'Firebase connected', 'Products and settings are saved to your Firebase project.'],
+    [!!s.companyName, 'Company name set', 'Shown in the sidebar and later in your shop.'],
+    [!!s.logoUrl, 'Logo uploaded', 'Upload it under Settings, Branding.'],
+    [ps.length > 0, 'First product created', 'Add a product with at least one plan.'],
+    [pub > 0, 'First product published', 'Set the status to Published to show it in the shop.']
+  ];
+  const recent = [...ps].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 5);
+  return `<div class="page-head"><div><h1>Dashboard</h1><p>Overview of your catalog and setup.</p></div><a class="btn btn-primary" href="#/products/new">${ic('plus')}Add product</a></div>
+  <div class="kpis">${[['Products', ps.length, 'in your catalog'], ['Published', pub, 'visible in shop'], ['Drafts', ps.length - pub, 'not yet visible'], ['Plans', plans, 'across all products']]
+    .map(k => `<div class="card kpi"><div class="l">${k[0]}</div><div class="v mono">${k[1]}</div><div class="s">${k[2]}</div></div>`).join('')}</div>
+  <div class="form-layout">
+    <div class="card"><div class="card-h"><h2>Recently updated</h2><a class="btn btn-sm" href="#/products">View all</a></div>
+      ${recent.length ? `<div class="table-wrap"><table><thead><tr><th>Product</th><th>Status</th><th class="r">From</th><th>Updated</th></tr></thead><tbody>${recent.map(p => `<tr><td><a href="#/products/edit/${p.id}" class="cell" style="text-decoration:none;color:inherit">${thumbHtml(p)}<div><b>${esc(p.name)}</b><span>${esc(p.category)}</span></div></a></td><td>${statusPill(p.status)}</td><td class="r mono">${isFinite(lowest(p)) ? money(lowest(p)) : '—'}</td><td>${fmtDate(p.updatedAt)}</td></tr>`).join('')}</tbody></table></div>`
+        : `<div class="empty"><b>No products yet</b>Create your first product to see it here.</div>`}</div>
+    <div class="card"><div class="card-h"><h2>Setup checklist</h2><span class="mono" style="color:var(--mute)">${checks.filter(c => c[0]).length}/${checks.length}</span></div>
+      <div class="card-b">${checks.map(c => `<div class="check"><span class="dot ${c[0] ? 'ok' : ''}">${c[0] ? ic('check', '') : ''}</span><div><b style="font-weight:600">${c[1]}</b><div style="color:var(--mute);font-size:12px">${c[2]}</div></div></div>`).join('')}</div></div>
+  </div>`;
+}
+
+function productRows() {
+  const q = state.q.toLowerCase();
+  const list = state.products.filter(p => (state.status === 'all' || p.status === state.status) && (!q || p.name.toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q)))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (!list.length) return `<tr><td colspan="6"><div class="empty"><b>${state.products.length ? 'No matching products' : 'No products yet'}</b>${state.products.length ? 'Try a different search or filter.' : 'Click Add product to create one.'}</div></td></tr>`;
+  return list.map(p => `<tr><td><div class="cell">${thumbHtml(p)}<div style="min-width:0"><b>${esc(p.name)}</b><span>${esc(p.shortDescription || '').slice(0, 60)}</span></div></div></td>
+    <td>${esc(p.category)}</td><td>${statusPill(p.status)}</td><td class="mono">${(p.plans || []).length}</td>
+    <td class="r mono">${isFinite(lowest(p)) ? money(lowest(p)) : '—'}</td>
+    <td class="r" style="white-space:nowrap"><a class="btn btn-sm" href="#/products/edit/${p.id}">Edit</a> <button class="btn btn-sm btn-danger" data-a="del" data-id="${p.id}">Delete</button></td></tr>`).join('');
+}
+function viewProducts() {
+  return `<div class="page-head"><div><h1>Products</h1><p>Software products and services with their plans and media.</p></div><a class="btn btn-primary" href="#/products/new">${ic('plus')}Add product</a></div>
+  <div class="card"><div class="card-h"><div class="toolbar"><input type="search" id="q" placeholder="Search products" value="${esc(state.q)}" style="width:240px" aria-label="Search products">
+    <select id="st" aria-label="Filter by status" style="width:150px"><option value="all">All statuses</option><option value="published" ${state.status === 'published' ? 'selected' : ''}>Published</option><option value="draft" ${state.status === 'draft' ? 'selected' : ''}>Draft</option></select></div>
+    <span style="color:var(--mute)">${state.products.length} total</span></div>
+    <div class="table-wrap"><table><thead><tr><th>Product</th><th>Category</th><th>Status</th><th>Plans</th><th class="r">Lowest price</th><th class="r">Actions</th></tr></thead><tbody id="tbody">${productRows()}</tbody></table></div></div>`;
+}
+
+/* ---- product form ---- */
+const blankPlan = () => ({ id: 'pl' + Math.random().toString(36).slice(2, 8), name: '', users: 5, originalPrice: '', sellingPrice: '', extraUserPrice: '' });
+function initForm() {
+  const [, mode, id] = routeParts();
+  if (mode === 'edit') {
+    const p = state.products.find(x => x.id === id);
+    if (!p) return F = { missing: true, key: location.hash };
+    F = { key: location.hash, id: p.id, isNew: false, removed: [], data: JSON.parse(JSON.stringify(p)), createdAt: p.createdAt };
+    F.data.gallery = F.data.gallery || []; F.data.plans = F.data.plans || [];
+  } else {
+    F = { key: location.hash, id: B.newId(), isNew: true, removed: [], data: { name: '', category: 'Software', status: 'draft', shortDescription: '', description: '', thumbnail: null, mainImage: null, gallery: [], video: null, plans: [blankPlan()] } };
+  }
+}
+function discHtml(p) {
+  const o = +p.originalPrice, s = +p.sellingPrice;
+  if (o > 0 && s >= 0 && p.sellingPrice !== '' && s < o) return `<div class="disc" id="disc-${p.id}">Save ${money(o - s)} (${Math.round((o - s) / o * 100)}% off)</div>`;
+  return `<div class="disc none" id="disc-${p.id}">No discount</div>`;
+}
+function planCard(p, i) {
+  const f = (k, label, type, extra = '', cls = '') => `<div class="field ${cls}"><label for="${k}-${p.id}">${label}</label><input id="${k}-${p.id}" type="${type}" ${extra} value="${esc(p[k])}" data-p="${i}" data-k="${k}"></div>`;
+  return `<div class="plan"><div class="plan-h"><b>Plan ${i + 1}</b>${F.data.plans.length > 1 ? `<button class="btn btn-sm btn-danger" data-a="rmplan" data-i="${i}">Remove</button>` : ''}</div>
+    <div class="plan-grid">${f('name', 'Plan name', 'text', 'placeholder="e.g. ULTRA"', 'w2')}${f('users', 'Users included', 'number', 'min="1" inputmode="numeric"', 'w2')}${f('extraUserPrice', 'Extra user price', 'number', 'min="0" inputmode="numeric" placeholder="per user, month"', 'w2')}
+      ${f('originalPrice', 'Original price', 'number', 'min="0" inputmode="numeric" placeholder="1999"', 'w2')}${f('sellingPrice', 'Selling price', 'number', 'min="0" inputmode="numeric" placeholder="999"', 'w2')}
+      <div class="field w2"><label>Discount</label>${discHtml(p)}</div></div></div>`;
+}
+function dropzone(slot, label, hint, accept, multiple) {
+  return `<label class="drop" data-slot="${slot}">${ic('upload')}<b style="color:var(--fg);font-weight:600">${label}</b><span style="font-size:12px">${hint}</span><input type="file" accept="${accept}" ${multiple ? 'multiple' : ''} data-slot="${slot}"></label>`;
+}
+function mediaItem(item, slot, idx, tag, contain) {
+  const isVid = slot === 'video';
+  return `<div class="media ${contain ? 'contain' : ''}">${isVid ? `<video src="${esc(item.url)}" controls muted preload="metadata"></video>` : `<img src="${esc(item.url)}" alt="">`}
+    ${item.file ? `<span class="tag">Not uploaded yet</span>` : tag ? `<span class="tag">${tag}</span>` : ''}
+    <button type="button" class="x" data-a="rmmedia" data-slot="${slot}" data-i="${idx}" aria-label="Remove">${ic('x', '')}</button></div>`;
+}
+function viewForm() {
+  if (F.missing) return `<div class="empty card"><b>Product not found</b><a class="btn" href="#/products" style="margin-top:12px">Back to products</a></div>`;
+  const d = F.data, ph = 'JPG, PNG or WebP, up to 5 MB';
+  return `<div class="page-head"><div><h1>${F.isNew ? 'Add product' : 'Edit product'}</h1><p>${F.isNew ? 'Create a product, add plans and upload its media.' : esc(d.name)}</p></div></div>
+  <div id="errs"></div>
+  <form id="pform" novalidate><div class="form-layout">
+    <div class="stack">
+      <div class="card"><div class="card-h"><h2>Basic details</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:16px">
+        <div class="field"><label for="f-name">Product name</label><input id="f-name" type="text" data-f="name" value="${esc(d.name)}" placeholder="e.g. StockPilot Inventory"></div>
+        <div class="field"><label for="f-short">Short description</label><input id="f-short" type="text" data-f="shortDescription" value="${esc(d.shortDescription)}" maxlength="140" placeholder="One line shown on product cards"></div>
+        <div class="field"><label for="f-desc">Full description</label><textarea id="f-desc" data-f="description" rows="5">${esc(d.description)}</textarea></div></div></div>
+      <div class="card"><div class="card-h"><div><h2>Plans and pricing</h2><p>Each plan has its own price, discount and extra user price. Prices in ${esc(state.settings.currency || 'INR')}.</p></div>
+        <button type="button" class="btn btn-sm" data-a="addplan">${ic('plus')}Add plan</button></div>
+        <div class="card-b" style="display:flex;flex-direction:column;gap:14px">${d.plans.map(planCard).join('')}</div></div>
+      <div class="card"><div class="card-h"><div><h2>Media</h2><p>Thumbnail for lists, main image for the product page, up to ${MAX_GALLERY} gallery images and one video.</p></div></div>
+        <div class="card-b" style="display:flex;flex-direction:column;gap:20px">
+          <div class="grid2"><div class="field"><span class="lbl">Thumbnail</span>${d.thumbnail ? mediaItem(d.thumbnail, 'thumbnail', 0) : dropzone('thumbnail', 'Upload thumbnail', 'Square works best. ' + ph, 'image/*')}</div>
+            <div class="field"><span class="lbl">Main image</span>${d.mainImage ? mediaItem(d.mainImage, 'mainImage', 0) : dropzone('mainImage', 'Upload main image', 'Wide image. ' + ph, 'image/*')}</div></div>
+          <div class="field"><span class="lbl">Gallery (${d.gallery.length} of ${MAX_GALLERY})</span><div class="gallery">${d.gallery.map((g, i) => mediaItem(g, 'gallery', i)).join('')}${d.gallery.length < MAX_GALLERY ? dropzone('gallery', 'Add images', ph, 'image/*', true) : ''}</div></div>
+          <div class="field"><span class="lbl">Video (optional)</span>${d.video ? `<div style="max-width:360px">${mediaItem(d.video, 'video', 0)}</div>` : dropzone('video', 'Upload video', 'MP4 or WebM, up to 100 MB', 'video/*')}</div></div></div>
+    </div>
+    <div class="stack" style="position:sticky;top:80px">
+      <div class="card"><div class="card-h"><h2>Publishing</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:16px">
+        <div class="field"><label for="f-status">Status</label><select id="f-status" data-f="status"><option value="draft" ${d.status === 'draft' ? 'selected' : ''}>Draft</option><option value="published" ${d.status === 'published' ? 'selected' : ''}>Published</option></select><small>Only published products appear in the shop.</small></div>
+        <div class="field"><label for="f-cat">Category</label><select id="f-cat" data-f="category">${['Software', 'Graphic design', 'Video editing', 'Motion graphics'].map(c => `<option ${d.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+        <button class="btn btn-primary" style="min-height:42px" type="submit">${F.isNew ? 'Create product' : 'Save changes'}</button>
+        <a class="btn" href="#/products">Cancel</a></div></div>
+    </div></div></form>`;
+}
+
+/* ---- settings ---- */
+function viewBranding() {
+  if (!L) L = { item: state.settings.logoUrl ? { url: state.settings.logoUrl, path: state.settings.logoPath } : null, removed: [] };
+  return `<div class="page-head"><div><h1>Branding</h1><p>Upload your logo. It is stored in Firebase Storage and the link is saved in Firestore.</p></div></div>
+  <div class="card" style="max-width:760px"><div class="card-h"><h2>Company logo</h2></div><div class="card-b"><div class="row">
+    <div class="logo-prev">${L.item ? `<img src="${esc(L.item.url)}" alt="Current logo">` : 'No logo yet'}</div>
+    <div style="flex:1;min-width:240px;display:flex;flex-direction:column;gap:12px">
+      ${dropzone('logo', L.item ? 'Replace logo' : 'Upload logo', 'PNG, SVG or JPG, up to 5 MB. Transparent background looks best.', 'image/*')}
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" data-a="savelogo" ${L.item?.file || L.removedFlag ? '' : 'disabled'}>Save logo</button>
+        ${L.item ? '<button class="btn btn-danger" data-a="rmlogo">Remove logo</button>' : ''}</div>
+      ${L.item?.file ? '<small style="color:var(--warn)">New logo selected. Click Save logo to upload it.</small>' : ''}</div></div></div></div>`;
+}
+function viewCompany() {
+  const s = state.settings;
+  return `<div class="page-head"><div><h1>Company</h1><p>Basic business details used across the console and shop.</p></div></div>
+  <form class="card" id="cform" style="max-width:760px" novalidate><div class="card-h"><h2>Company profile</h2></div><div class="card-b" style="display:flex;flex-direction:column;gap:16px">
+    <div class="field"><label for="c-name">Company name</label><input id="c-name" type="text" value="${esc(s.companyName)}"></div>
+    <div class="grid2"><div class="field"><label for="c-mail">Support email</label><input id="c-mail" type="email" value="${esc(s.supportEmail)}"></div>
+      <div class="field"><label for="c-web">Website</label><input id="c-web" type="text" value="${esc(s.website)}" placeholder="https://"></div></div>
+    <div class="field" style="max-width:240px"><label for="c-cur">Currency</label><select id="c-cur">${Object.keys(CUR).map(c => `<option ${s.currency === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+    <div><button class="btn btn-primary" type="submit">Save company</button></div></div></form>`;
+}
+
+/* ================= render ================= */
+function render() {
+  const root = $('#root');
+  if (!state.user) { root.innerHTML = loginView(render.err); $('#login').onsubmit = onLogin; return; }
+  const key = routeKey(); let view;
+  if (!state.loaded) view = `<div class="empty"><b>Loading…</b></div>`;
+  else {
+    if (key !== 'products/new' && key !== 'products/edit') F = null;
+    if (!key.startsWith('settings/branding')) L = null;
+    const err = state.error ? `<div class="banner bad"><div><b>Could not reach Firebase.</b> ${esc(state.error)}<br>Check that Authentication, Firestore and Storage are enabled and the rules in this repo are deployed.</div></div>` : '';
+    if (key === 'products/new' || key === 'products/edit') { if (!F || F.key !== location.hash) initForm(); view = viewForm(); }
+    else view = err + ({ dashboard: viewDashboard, products: viewProducts, 'settings/branding': viewBranding, 'settings/company': viewCompany }[key] || viewDashboard)();
+  }
+  const y = window.scrollY; root.innerHTML = shell(view); window.scrollTo(0, y);
+}
+
+/* ================= actions ================= */
+async function loadAll() {
+  try { [state.settings, state.products] = await Promise.all([B.getSettings().then(s => ({ currency: 'INR', ...s })), B.listProducts()]); state.error = ''; }
+  catch (e) { state.error = e.message || String(e); }
+  state.loaded = true; render();
+}
+async function onLogin(e) {
+  e.preventDefault();
+  try { await B.signIn($('#em').value.trim(), $('#pw').value); }
+  catch (er) { render.err = /invalid|wrong|user-not-found|credential/i.test(er.code + er.message) ? 'Email or password is incorrect.' : (er.message || 'Sign in failed.'); render(); }
+}
+
+function pickFiles(slot, files) {
+  files = [...files]; if (!files.length) return;
+  const isVid = slot === 'video', max = isVid ? MAX_VID : MAX_IMG, ok = [];
+  for (const f of files) {
+    if (!f.type.startsWith(isVid ? 'video/' : 'image/')) { toast(`${f.name} is not a ${isVid ? 'video' : 'image'}.`, true); continue; }
+    if (f.size > max) { toast(`${f.name} is over ${mb(max)} MB.`, true); continue; }
+    ok.push({ url: URL.createObjectURL(f), file: f });
+  }
+  if (!ok.length) return;
+  if (slot === 'logo') { L.item = ok[0]; L.removedFlag = false; return render(); }
+  const d = F.data;
+  if (slot === 'gallery') {
+    const room = MAX_GALLERY - d.gallery.length; if (ok.length > room) toast(`Only ${MAX_GALLERY} gallery images allowed. Extra files skipped.`, true);
+    d.gallery.push(...ok.slice(0, room));
+  } else d[slot] = ok[0];
+  render();
+}
+function dropItem(item) { if (item?.path) F.removed.push(item.path); if (item?.file) URL.revokeObjectURL(item.url); }
+
+function validateForm() {
+  const d = F.data, errs = [];
+  if (!d.name.trim()) errs.push('Product name is required.');
+  if (!d.plans.length) errs.push('Add at least one plan.');
+  d.plans.forEach((p, i) => {
+    const n = `Plan ${i + 1}`;
+    if (!String(p.name).trim()) errs.push(`${n}: enter a plan name.`);
+    if (p.sellingPrice === '' || +p.sellingPrice < 0) errs.push(`${n}: enter a selling price.`);
+    if (p.originalPrice !== '' && +p.sellingPrice > +p.originalPrice) errs.push(`${n}: selling price cannot be higher than the original price.`);
+    if (!(+p.users >= 1)) errs.push(`${n}: users included must be at least 1.`);
+  });
+  return errs;
+}
+
+async function runUploads(jobs, title) {
+  const total = jobs.reduce((a, j) => a + j.file.size, 0) || 1, done = new Map(), box = progressBox(title);
+  const upd = () => { const v = [...done.values()].reduce((a, b) => a + b, 0); box.set(Math.min(100, v / total * 100), `${mb(v) || '0'} of ${mb(total) || '0'} MB uploaded`); };
+  try {
+    return await Promise.all(jobs.map(async (j, i) => {
+      const r = await B.upload(j.path, j.file, loaded => { done.set(i, loaded); upd(); });
+      done.set(i, j.file.size); upd(); return r;
+    }));
+  } finally { box.close(); }
+}
+
+async function saveProduct() {
+  const errs = validateForm(), box = $('#errs');
+  if (errs.length) { box.innerHTML = `<div class="banner bad"><div><b>Fix these before saving:</b><ul>${errs.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div></div>`; window.scrollTo(0, 0); return; }
+  box.innerHTML = '';
+  const d = F.data, now = Date.now(), jobs = [], tag = () => `${now}-${jobs.length}`;
+  const queue = (item, folder) => { if (item?.file) { const j = { item, file: item.file, path: `products/${F.id}/${folder}-${tag()}-${safeName(item.file.name)}` }; jobs.push(j); } };
+  queue(d.thumbnail, 'thumbnail'); queue(d.mainImage, 'main'); d.gallery.forEach(g => queue(g, 'gallery')); queue(d.video, 'video');
+  try {
+    const res = jobs.length ? await runUploads(jobs, 'Uploading media') : [];
+    jobs.forEach((j, i) => { j.item.url = res[i].url; j.item.path = res[i].path; delete j.item.file; });
+    const clean = m => m ? { url: m.url, path: m.path || '' } : null;
+    const num = v => v === '' || v == null ? 0 : +v;
+    const doc = {
+      id: F.id, name: d.name.trim(), category: d.category, status: d.status, shortDescription: d.shortDescription.trim(), description: d.description.trim(),
+      thumbnail: clean(d.thumbnail), mainImage: clean(d.mainImage), gallery: d.gallery.map(clean), video: clean(d.video),
+      plans: d.plans.map(p => ({ id: p.id, name: String(p.name).trim(), users: num(p.users), originalPrice: p.originalPrice === '' ? num(p.sellingPrice) : num(p.originalPrice), sellingPrice: num(p.sellingPrice), extraUserPrice: num(p.extraUserPrice) })),
+      createdAt: F.createdAt || now, updatedAt: now
+    };
+    await B.saveProduct(doc);
+    F.removed.forEach(p => B.removeFile(p));
+    state.products = state.products.filter(p => p.id !== doc.id).concat([doc]);
+    toast(F.isNew ? 'Product created' : 'Changes saved'); F = null; location.hash = '#/products';
+  } catch (e) { toast('Save failed: ' + (e.code || e.message), true); render(); }
+}
+
+async function saveLogo() {
+  try {
+    const s = { ...state.settings };
+    if (L.item?.file) {
+      const f = L.item.file, [r] = await runUploads([{ file: f, path: `branding/logo-${Date.now()}-${safeName(f.name)}` }], 'Uploading logo');
+      if (s.logoPath) B.removeFile(s.logoPath);
+      s.logoUrl = r.url; s.logoPath = r.path;
+    } else if (L.removedFlag) { if (s.logoPath) B.removeFile(s.logoPath); s.logoUrl = ''; s.logoPath = ''; }
+    await B.saveSettings(s); state.settings = s; L = null; toast('Logo saved'); render();
+  } catch (e) { toast('Logo save failed: ' + (e.code || e.message), true); }
+}
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-a]'); if (!b) return;
+  const a = b.dataset.a;
+  if (a === 'menu') { state.menu = !state.menu; $('#side').classList.toggle('open', state.menu); }
+  else if (a === 'logout') { B.signOut(); state.loaded = false; }
+  else if (a === 'addplan') { F.data.plans.push(blankPlan()); render(); }
+  else if (a === 'rmplan') { F.data.plans.splice(+b.dataset.i, 1); render(); }
+  else if (a === 'rmmedia') {
+    const { slot, i } = b.dataset;
+    if (slot === 'gallery') dropItem(F.data.gallery.splice(+i, 1)[0]); else { dropItem(F.data[slot]); F.data[slot] = null; }
+    render();
+  }
+  else if (a === 'del') {
+    const p = state.products.find(x => x.id === b.dataset.id);
+    if (!await confirmBox('Delete product', `"${p.name}" and its uploaded media will be permanently deleted.`, 'Delete')) return;
+    try {
+      await B.deleteProduct(p.id);
+      [p.thumbnail, p.mainImage, p.video, ...(p.gallery || [])].forEach(m => m?.path && B.removeFile(m.path));
+      state.products = state.products.filter(x => x.id !== p.id); toast('Product deleted'); render();
+    } catch (er) { toast('Delete failed: ' + (er.code || er.message), true); }
+  }
+  else if (a === 'savelogo') saveLogo();
+  else if (a === 'rmlogo') { if (L.item?.path) { /* removed on save */ } L.item = null; L.removedFlag = true; render(); }
+});
+document.addEventListener('submit', e => {
+  if (e.target.id === 'pform') { e.preventDefault(); saveProduct(); }
+  if (e.target.id === 'cform') {
+    e.preventDefault();
+    const s = { ...state.settings, companyName: $('#c-name').value.trim(), supportEmail: $('#c-mail').value.trim(), website: $('#c-web').value.trim(), currency: $('#c-cur').value };
+    B.saveSettings(s).then(() => { state.settings = s; toast('Company saved'); render(); }).catch(er => toast('Save failed: ' + (er.code || er.message), true));
+  }
+});
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.id === 'q') { state.q = t.value; $('#tbody').innerHTML = productRows(); }
+  else if (F && t.dataset.f) F.data[t.dataset.f] = t.value;
+  else if (F && t.dataset.p !== undefined) {
+    const p = F.data.plans[+t.dataset.p]; p[t.dataset.k] = t.value;
+    if (t.dataset.k === 'originalPrice' || t.dataset.k === 'sellingPrice') $('#disc-' + p.id).outerHTML = discHtml(p);
+  }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id === 'st') { state.status = t.value; $('#tbody').innerHTML = productRows(); }
+  else if (F && t.dataset.f) F.data[t.dataset.f] = t.value;
+  else if (t.type === 'file' && t.dataset.slot) { pickFiles(t.dataset.slot, t.files); t.value = ''; }
+});
+['dragover', 'dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => {
+  const z = e.target.closest('.drop'); if (!z) return;
+  e.preventDefault(); z.classList.toggle('over', ev === 'dragover');
+  if (ev === 'drop') pickFiles(z.dataset.slot, e.dataTransfer.files);
+}));
+window.addEventListener('hashchange', () => { state.menu = false; window.scrollTo(0, 0); render(); });
+
+/* ================= boot ================= */
+(async function boot() {
+  $('#root').innerHTML = '<div class="empty" style="padding-top:20vh"><b>Loading…</b></div>';
+  try { B = DEMO ? demoBackend() : await firebaseBackend(); }
+  catch (e) { $('#root').innerHTML = `<div class="empty" style="padding-top:20vh"><b>Could not load Firebase</b>${esc(e.message)}<br>Open this page over http(s), for example with Firebase Hosting, and check your connection.</div>`; return; }
+  B.onAuth(async u => {
+    const was = state.user; state.user = u; render.err = '';
+    if (u && !was) { state.loaded = false; render(); await loadAll(); }
+    else render();
+  });
+})();
+</script>
+</body>
+</html>
