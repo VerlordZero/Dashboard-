@@ -111,6 +111,7 @@ input.bad,select.bad{border-color:var(--bad)}
 .check:first-child{border-top:0}
 .dot{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;flex:none;background:var(--raise);color:var(--mute)}
 .dot.ok{background:var(--goodbg);color:var(--good)}
+.dot.no{background:var(--badbg);color:var(--bad)}
 .dot svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.5}
 .empty{padding:48px 20px;text-align:center;color:var(--mute)}
 .empty b{display:block;color:var(--fg);font-size:15px;margin-bottom:4px}

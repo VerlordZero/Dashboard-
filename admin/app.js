@@ -5,9 +5,11 @@ const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const DEMO = new URLSearchParams(location.search).has('demo') || location.protocol === 'file:';
 const CUR = { INR: '₹', USD: '$', EUR: '€', GBP: '£', AED: 'AED ' };
+const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 const MAX_IMG = 5 * 1024 * 1024, MAX_VID = 100 * 1024 * 1024, MAX_GALLERY = 5;
 const money = n => (CUR[state.settings.currency] || '₹') + Number(n || 0).toLocaleString('en-IN');
 const fmtDate = t => t ? new Date(t).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+const fmtBytes = b => b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : b >= 1e6 ? (b / 1e6).toFixed(1) + ' MB' : (b / 1e3).toFixed(0) + ' KB';
 const mb = b => (b / 1048576).toFixed(0);
 const safeName = n => n.toLowerCase().replace(/[^a-z0-9.]+/g, '-').slice(-40);
 
@@ -67,7 +69,17 @@ async function firebaseBackend() {
       const r = St.ref(st, path), t = St.uploadBytesResumable(r, file, { contentType: file.type });
       t.on('state_changed', s => onP(s.bytesTransferred, s.totalBytes), rej, async () => res({ url: await St.getDownloadURL(r), path }));
     }),
-    removeFile: path => St.deleteObject(St.ref(st, path)).catch(() => {})
+    removeFile: path => St.deleteObject(St.ref(st, path)).catch(() => {}),
+    getToken: () => auth.currentUser.getIdToken(),
+    ping: async () => { const r = F.doc(db, 'settings', '_ping'); await F.setDoc(r, { t: Date.now() }); const s = await F.getDoc(r); await F.deleteDoc(r); if (!s.exists()) throw new Error('Wrote a document but could not read it back'); },
+    pingStorage: async () => { const r = St.ref(st, '_ping/test.png'); await St.uploadBytes(r, await (await fetch(PNG)).blob(), { contentType: 'image/png' }); await St.getDownloadURL(r); await St.deleteObject(r); },
+    stats: async () => {
+      let files = 0, size = 0; const CAP = 300;
+      const walk = async r => { const l = await St.list(r, { maxResults: 1000 }); for (const i of l.items) { if (files >= CAP) return; files++; try { size += (await St.getMetadata(i)).size; } catch (e) {} } for (const q of l.prefixes) await walk(q); };
+      await walk(St.ref(st));
+      const c = await F.getCountFromServer(F.collection(db, 'products'));
+      return { products: c.data().count, files, size, capped: files >= CAP };
+    }
   };
 }
 
@@ -90,7 +102,9 @@ function demoBackend() {
     deleteProduct: async id => { products = products.filter(x => x.id !== id); },
     getSettings: async () => ({ ...settings }), saveSettings: async o => { settings = { ...o }; },
     upload: async (path, file, onP) => { onP(file.size / 2, file.size); await new Promise(r => setTimeout(r, 150)); onP(file.size, file.size); return { url: URL.createObjectURL(file), path }; },
-    removeFile: async () => {}
+    removeFile: async () => {},
+    getToken: async () => 'demo', ping: async () => {}, pingStorage: async () => {},
+    stats: async () => ({ products: products.length, files: 0, size: 0, demo: true })
   };
 }
 
@@ -98,11 +112,51 @@ function demoBackend() {
 const state = { user: null, settings: { currency: 'INR' }, products: [], loaded: false, error: '', q: '', status: 'all', menu: false };
 let B = null, F = null, L = null; // backend, product form, logo form
 
+/* ---- Cloudinary (unsigned uploads from the browser, usage via a Cloud Function) ---- */
+const cloudOn = () => !!(state.settings.cloudName && state.settings.uploadPreset);
+function cloudUpload(file, folder, onP) {
+  return new Promise((res, rej) => {
+    const x = new XMLHttpRequest();
+    x.open('POST', `https://api.cloudinary.com/v1_1/${encodeURIComponent(state.settings.cloudName.trim())}/auto/upload`);
+    x.upload.onprogress = e => e.lengthComputable && onP(e.loaded, e.total);
+    x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch (e) {}
+      x.status >= 200 && x.status < 300 ? res({ url: j.secure_url, path: '', publicId: j.public_id, provider: 'cloudinary' }) : rej(new Error('Cloudinary: ' + (j.error?.message || 'HTTP ' + x.status))); };
+    x.onerror = () => rej(new Error('Cloudinary: network error. Check the cloud name.'));
+    const fd = new FormData(); fd.append('file', file); fd.append('upload_preset', state.settings.uploadPreset.trim()); fd.append('folder', folder); x.send(fd);
+  });
+}
+const uploadAny = (path, file, onP) => cloudOn() ? cloudUpload(file, path.split('/').slice(0, -1).join('/'), onP) : B.upload(path, file, onP);
+async function fetchCloudUsage() {
+  const u = (state.settings.usageUrl || '').trim();
+  if (!u) { if (DEMO) return { sample: true, storageBytes: 2.4e9, credits: { usage: 12.4, limit: 25, used_percent: 49.6 }, videos: 18, images: 342 }; throw new Error('Usage endpoint not set. Deploy the function and paste its URL in Settings, Integrations.'); }
+  const r = await fetch(u, { headers: { Authorization: 'Bearer ' + await B.getToken() } }), j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j;
+}
+async function loadUsage() {
+  if (state.usageBusy) return; state.usageBusy = true; state.usage = { loading: true };
+  const [c, f] = await Promise.allSettled([fetchCloudUsage(), B.stats()]);
+  state.usage = { cloud: c.status === 'fulfilled' ? c.value : null, cloudErr: c.status === 'rejected' ? c.reason.message : '', fb: f.status === 'fulfilled' ? f.value : null, fbErr: f.status === 'rejected' ? (f.reason.code || f.reason.message) : '', at: Date.now() };
+  state.usageBusy = false; if (routeKey() === 'dashboard') render();
+}
+function usageCard() {
+  const u = state.usage; if (!u) return '';
+  const head = `<div class="card-h"><div><h2>Storage and usage</h2><p>${u.at ? 'Updated ' + new Date(u.at).toLocaleTimeString('en-IN') : 'Loading…'}</p></div><button class="btn btn-sm" data-a="usage">Refresh</button></div>`;
+  if (u.loading) return `<div class="card">${head}<div class="empty">Loading usage…</div></div>`;
+  const kv = (l, v) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line)"><span style="color:var(--mute)">${l}</span><b class="mono">${v}</b></div>`;
+  const c = u.cloud, cr = c?.credits, pct = cr && cr.limit ? Math.min(100, cr.usage / cr.limit * 100) : cr?.used_percent;
+  const cloud = u.cloudErr ? `<div class="banner warn">${esc(u.cloudErr)}</div>` : `${c.sample ? '<div class="banner info">Sample numbers. Connect Cloudinary to see real usage.</div>' : ''}
+    ${kv('Storage used', fmtBytes(c.storageBytes))}${cr ? kv('Credits used', `${(+cr.usage).toFixed(1)}${cr.limit ? ' of ' + cr.limit : ''}`) : ''}
+    ${pct != null ? `<div class="prog" style="margin:4px 0 8px"><i style="width:${pct}%"></i></div>${kv('Left', cr.limit ? (cr.limit - cr.usage).toFixed(1) + ' credits' : (100 - pct).toFixed(0) + '%')}` : ''}${kv('Videos', c.videos)}${kv('Images', c.images)}`;
+  const fb = u.fbErr ? `<div class="banner warn">${esc(u.fbErr)}</div>` : `${u.fb.demo ? '<div class="banner info">Demo mode: Firebase not connected.</div>' : ''}${kv('Products in Firestore', u.fb.products)}${kv('Files in Firebase Storage', u.fb.files + (u.fb.capped ? '+' : ''))}${kv('Firebase Storage size', fmtBytes(u.fb.size))}
+    <p style="color:var(--mute);font-size:12px;margin-top:8px">Plan quotas are shown in the Firebase console, Usage and billing.</p>`;
+  return `<div class="card">${head}<div class="card-b grid2"><div><h3 style="font-size:14px;margin-bottom:6px">Cloudinary</h3>${cloud}</div><div><h3 style="font-size:14px;margin-bottom:6px">Firebase</h3>${fb}</div></div></div>`;
+}
+
 /* ================= shell ================= */
 const NAV = [
   { group: 'Overview', items: [{ key: 'dashboard', label: 'Dashboard', icon: 'home', href: '#/dashboard' }] },
   { group: 'Catalog', items: [{ key: 'products', label: 'Products', icon: 'box', href: '#/products', subs: [['All products', '#/products', 'products'], ['Add product', '#/products/new', 'products/new']] }] },
-  { group: 'Configuration', items: [{ key: 'settings', label: 'Settings', icon: 'gear', href: '#/settings/branding', subs: [['Branding', '#/settings/branding', 'settings/branding'], ['Company', '#/settings/company', 'settings/company']] }] }
+  { group: 'Configuration', items: [{ key: 'settings', label: 'Settings', icon: 'gear', href: '#/settings/branding', subs: [['Branding', '#/settings/branding', 'settings/branding'], ['Company', '#/settings/company', 'settings/company'], ['Integrations', '#/settings/integrations', 'settings/integrations']] }] }
 ];
 const routeParts = () => { const p = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean); return p.length ? p : ['dashboard']; };
 const routeKey = () => { const [a, b] = routeParts(); return a === 'settings' ? 'settings/' + (b || 'branding') : a === 'products' && b === 'new' ? 'products/new' : a === 'products' && b === 'edit' ? 'products/edit' : a; };
@@ -117,7 +171,7 @@ function sidebar() {
       ${(i.subs || []).map(([l, h, k]) => `<a href="${h}" class="sub ${key === k || (k === 'products' && key === 'products/edit') ? 'on' : ''}">${l}</a>`).join('')}`).join('')}`).join('')}</nav>
     <div class="side-foot">${DEMO ? 'Demo mode: changes are not saved' : 'Connected to Firebase'}</div></aside>`;
 }
-const CRUMB = { dashboard: ['Dashboard'], products: ['Products', 'All products'], 'products/new': ['Products', 'Add product'], 'products/edit': ['Products', 'Edit product'], 'settings/branding': ['Settings', 'Branding'], 'settings/company': ['Settings', 'Company'] };
+const CRUMB = { dashboard: ['Dashboard'], products: ['Products', 'All products'], 'products/new': ['Products', 'Add product'], 'products/edit': ['Products', 'Edit product'], 'settings/branding': ['Settings', 'Branding'], 'settings/company': ['Settings', 'Company'], 'settings/integrations': ['Settings', 'Integrations'] };
 
 function shell(view) {
   const c = CRUMB[routeKey()] || ['Dashboard'], u = state.user.email || '';
@@ -154,6 +208,7 @@ function viewDashboard() {
   return `<div class="page-head"><div><h1>Dashboard</h1><p>Overview of your catalog and setup.</p></div><a class="btn btn-primary" href="#/products/new">${ic('plus')}Add product</a></div>
   <div class="kpis">${[['Products', ps.length, 'in your catalog'], ['Published', pub, 'visible in shop'], ['Drafts', ps.length - pub, 'not yet visible'], ['Plans', plans, 'across all products']]
     .map(k => `<div class="card kpi"><div class="l">${k[0]}</div><div class="v mono">${k[1]}</div><div class="s">${k[2]}</div></div>`).join('')}</div>
+  ${usageCard()}
   <div class="form-layout">
     <div class="card"><div class="card-h"><h2>Recently updated</h2><a class="btn btn-sm" href="#/products">View all</a></div>
       ${recent.length ? `<div class="table-wrap"><table><thead><tr><th>Product</th><th>Status</th><th class="r">From</th><th>Updated</th></tr></thead><tbody>${recent.map(p => `<tr><td><a href="#/products/edit/${p.id}" class="cell" style="text-decoration:none;color:inherit">${thumbHtml(p)}<div><b>${esc(p.name)}</b><span>${esc(p.category)}</span></div></a></td><td>${statusPill(p.status)}</td><td class="r mono">${isFinite(lowest(p)) ? money(lowest(p)) : '—'}</td><td>${fmtDate(p.updatedAt)}</td></tr>`).join('')}</tbody></table></div>`
@@ -268,6 +323,27 @@ function viewCompany() {
     <div><button class="btn btn-primary" type="submit">Save company</button></div></div></form>`;
 }
 
+function viewIntegrations() {
+  const s = state.settings;
+  return `<div class="page-head"><div><h1>Integrations</h1><p>Connect Cloudinary for media and check that everything works.</p></div></div>
+  <form class="card" id="iform" style="max-width:760px" novalidate><div class="card-h"><div><h2>Cloudinary</h2><p>When set, product media and the logo upload to Cloudinary. Otherwise they go to Firebase Storage.</p></div></div><div class="card-b" style="display:flex;flex-direction:column;gap:16px">
+    <div class="grid2"><div class="field"><label for="i-cloud">Cloud name</label><input id="i-cloud" type="text" value="${esc(s.cloudName)}" autocomplete="off"><small>Cloudinary dashboard, top left.</small></div>
+      <div class="field"><label for="i-preset">Unsigned upload preset</label><input id="i-preset" type="text" value="${esc(s.uploadPreset)}" autocomplete="off"><small>Settings, Upload, Add upload preset, Signing mode: Unsigned.</small></div></div>
+    <div class="field"><label for="i-usage">Usage endpoint URL</label><input id="i-usage" type="text" value="${esc(s.usageUrl)}" placeholder="https://...cloudfunctions.net/cloudinaryUsage" autocomplete="off"><small>Printed by <span class="mono">firebase deploy</span> for the cloudinaryUsage function. Never put the API secret in this page.</small></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" type="submit">Save</button><button class="btn" type="button" data-a="tests">Run connection tests</button></div></div></form>
+  <div class="card" style="max-width:760px"><div class="card-h"><h2>Test results</h2></div><div class="card-b" id="tests"><span style="color:var(--mute)">Save your settings, then run the tests.</span></div></div>`;
+}
+async function runTests() {
+  const out = $('#tests'), rows = [];
+  const show = () => out.innerHTML = rows.map(r => `<div class="check"><span class="dot ${r[1] === true ? 'ok' : r[1] === false ? 'no' : ''}">${r[1] === true ? ic('check', '') : r[1] === false ? ic('x', '') : ''}</span><div><b style="font-weight:600">${esc(r[0])}</b><div style="color:var(--mute);font-size:12px;overflow-wrap:anywhere">${esc(r[2])}</div></div></div>`).join('');
+  const step = async (name, fn) => { rows.push([name, null, 'Testing…']); show(); try { rows[rows.length - 1] = [name, true, await fn()]; } catch (e) { rows[rows.length - 1] = [name, false, e.code || e.message || String(e)]; } show(); };
+  const file = new File([await (await fetch(PNG)).blob()], 'ping.png', { type: 'image/png' });
+  await step('Firestore write and read', async () => { await B.ping(); return DEMO ? 'Demo mode: Firebase was not contacted' : 'Wrote and read back a test document'; });
+  await step('Firebase Storage upload', async () => { await B.pingStorage(); return DEMO ? 'Demo mode: Firebase was not contacted' : 'Uploaded and deleted a test image'; });
+  await step('Cloudinary upload', async () => { if (!cloudOn()) throw new Error('Enter cloud name and upload preset, then save.'); const r = await cloudUpload(file, '_tests', () => {}); return 'Uploaded: ' + r.url; });
+  await step('Cloudinary usage', async () => { const u = await fetchCloudUsage(); return `${u.sample ? 'Sample data. ' : ''}Storage ${fmtBytes(u.storageBytes)}, ${u.videos} videos, ${u.images} images`; });
+}
+
 /* ================= render ================= */
 function render() {
   const root = $('#root');
@@ -279,8 +355,9 @@ function render() {
     if (!key.startsWith('settings/branding')) L = null;
     const err = state.error ? `<div class="banner bad"><div><b>Could not reach Firebase.</b> ${esc(state.error)}<br>Check that Authentication, Firestore and Storage are enabled and the rules in this repo are deployed.</div></div>` : '';
     if (key === 'products/new' || key === 'products/edit') { if (!F || F.key !== location.hash) initForm(); view = viewForm(); }
-    else view = err + ({ dashboard: viewDashboard, products: viewProducts, 'settings/branding': viewBranding, 'settings/company': viewCompany }[key] || viewDashboard)();
+    else view = err + ({ dashboard: viewDashboard, products: viewProducts, 'settings/branding': viewBranding, 'settings/company': viewCompany, 'settings/integrations': viewIntegrations }[key] || viewDashboard)();
   }
+  if (key === 'dashboard' && state.loaded && !state.usage) loadUsage();
   const y = window.scrollY; root.innerHTML = shell(view); window.scrollTo(0, y);
 }
 
@@ -334,7 +411,7 @@ async function runUploads(jobs, title) {
   const upd = () => { const v = [...done.values()].reduce((a, b) => a + b, 0); box.set(Math.min(100, v / total * 100), `${mb(v) || '0'} of ${mb(total) || '0'} MB uploaded`); };
   try {
     return await Promise.all(jobs.map(async (j, i) => {
-      const r = await B.upload(j.path, j.file, loaded => { done.set(i, loaded); upd(); });
+      const r = await uploadAny(j.path, j.file, loaded => { done.set(i, loaded); upd(); });
       done.set(i, j.file.size); upd(); return r;
     }));
   } finally { box.close(); }
@@ -349,8 +426,8 @@ async function saveProduct() {
   queue(d.thumbnail, 'thumbnail'); queue(d.mainImage, 'main'); d.gallery.forEach(g => queue(g, 'gallery')); queue(d.video, 'video');
   try {
     const res = jobs.length ? await runUploads(jobs, 'Uploading media') : [];
-    jobs.forEach((j, i) => { j.item.url = res[i].url; j.item.path = res[i].path; delete j.item.file; });
-    const clean = m => m ? { url: m.url, path: m.path || '' } : null;
+    jobs.forEach((j, i) => { Object.assign(j.item, res[i]); delete j.item.file; });
+    const clean = m => m ? { url: m.url, path: m.path || '', publicId: m.publicId || '', provider: m.provider || 'firebase' } : null;
     const num = v => v === '' || v == null ? 0 : +v;
     const doc = {
       id: F.id, name: d.name.trim(), category: d.category, status: d.status, shortDescription: d.shortDescription.trim(), description: d.description.trim(),
@@ -371,7 +448,7 @@ async function saveLogo() {
     if (L.item?.file) {
       const f = L.item.file, [r] = await runUploads([{ file: f, path: `branding/logo-${Date.now()}-${safeName(f.name)}` }], 'Uploading logo');
       if (s.logoPath) B.removeFile(s.logoPath);
-      s.logoUrl = r.url; s.logoPath = r.path;
+      s.logoUrl = r.url; s.logoPath = r.path || '';
     } else if (L.removedFlag) { if (s.logoPath) B.removeFile(s.logoPath); s.logoUrl = ''; s.logoPath = ''; }
     await B.saveSettings(s); state.settings = s; L = null; toast('Logo saved'); render();
   } catch (e) { toast('Logo save failed: ' + (e.code || e.message), true); }
@@ -399,10 +476,17 @@ document.addEventListener('click', async e => {
     } catch (er) { toast('Delete failed: ' + (er.code || er.message), true); }
   }
   else if (a === 'savelogo') saveLogo();
+  else if (a === 'usage') { state.usage = null; loadUsage(); render(); }
+  else if (a === 'tests') runTests(b);
   else if (a === 'rmlogo') { if (L.item?.path) { /* removed on save */ } L.item = null; L.removedFlag = true; render(); }
 });
 document.addEventListener('submit', e => {
   if (e.target.id === 'pform') { e.preventDefault(); saveProduct(); }
+  if (e.target.id === 'iform') {
+    e.preventDefault();
+    const s = { ...state.settings, cloudName: $('#i-cloud').value.trim(), uploadPreset: $('#i-preset').value.trim(), usageUrl: $('#i-usage').value.trim() };
+    B.saveSettings(s).then(() => { state.settings = s; state.usage = null; toast('Integrations saved'); }).catch(er => toast('Save failed: ' + (er.code || er.message), true));
+  }
   if (e.target.id === 'cform') {
     e.preventDefault();
     const s = { ...state.settings, companyName: $('#c-name').value.trim(), supportEmail: $('#c-mail').value.trim(), website: $('#c-web').value.trim(), currency: $('#c-cur').value };
