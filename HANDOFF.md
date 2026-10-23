@@ -24,7 +24,7 @@ Written at the end of the first working session so the project can continue in a
 ## How to run it locally
 
 1. Install Node.js 18 or newer.
-2. Double-click `server/start-helper.bat` (or run `node server/cloudinary-server.js`).
+2. Not needed for everyday work. Media library and usage need a hosted server (Netlify function or Supabase), see below.
 3. Open `http://localhost:8787`.
 
 Without the helper the console still works for products, plans and uploads. Only the Media library and Cloudinary usage numbers need it.
