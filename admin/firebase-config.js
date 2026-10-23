@@ -1,5 +1,8 @@
 // Firebase web config. These values identify the project and are safe in client code;
 // access is protected by Firebase Auth plus firestore.rules and storage.rules.
+// Set to true to turn the sign-in screen back on (needs Firebase Authentication enabled).
+export const requireLogin = false;
+
 export const firebaseConfig = {
   apiKey: "AIzaSyAalTjSYreVdtfah0W-b-gQE6dvw9biniw",
   authDomain: "dtarks-c75b8.firebaseapp.com",

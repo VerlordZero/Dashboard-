@@ -1,4 +1,4 @@
-import { firebaseConfig } from './firebase-config.js';
+import { firebaseConfig, requireLogin } from './firebase-config.js';
 
 /* ================= helpers ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -56,7 +56,7 @@ async function firebaseBackend() {
   const auth = A.getAuth(app), db = F.getFirestore(app), st = St.getStorage(app);
   import(`${base}firebase-analytics.js`).then(m => m.isSupported().then(ok => ok && m.getAnalytics(app))).catch(() => {});
   return {
-    onAuth: cb => A.onAuthStateChanged(auth, u => cb(u ? { email: u.email } : null)),
+    onAuth: cb => requireLogin ? A.onAuthStateChanged(auth, u => cb(u ? { email: u.email } : null)) : (setTimeout(() => cb({ email: 'Test mode (no login)' }), 0), () => {}),
     signIn: (e, p) => A.signInWithEmailAndPassword(auth, e, p),
     signOut: () => A.signOut(auth),
     newId: () => F.doc(F.collection(db, 'products')).id,
@@ -70,7 +70,7 @@ async function firebaseBackend() {
       t.on('state_changed', s => onP(s.bytesTransferred, s.totalBytes), rej, async () => res({ url: await St.getDownloadURL(r), path }));
     }),
     removeFile: path => St.deleteObject(St.ref(st, path)).catch(() => {}),
-    getToken: () => auth.currentUser.getIdToken(),
+    getToken: async () => (auth.currentUser ? auth.currentUser.getIdToken() : ''),
     ping: async () => { const r = F.doc(db, 'settings', '_ping'); await F.setDoc(r, { t: Date.now() }); const s = await F.getDoc(r); await F.deleteDoc(r); if (!s.exists()) throw new Error('Wrote a document but could not read it back'); },
     pingStorage: async () => { const r = St.ref(st, '_ping/test.png'); await St.uploadBytes(r, await (await fetch(PNG)).blob(), { contentType: 'image/png' }); await St.getDownloadURL(r); await St.deleteObject(r); },
     stats: async () => {
@@ -243,7 +243,7 @@ function shell(view) {
   const c = CRUMB[routeKey()] || ['Dashboard'], u = state.user.email || '';
   return `<div class="app">${sidebar()}<div class="main">
     <header class="top"><div class="crumbs"><button class="btn btn-sm menu-btn" data-a="menu" aria-label="Open menu">${ic('menu')}</button>${c.map((x, i) => i === c.length - 1 ? `<b>${x}</b>` : `<span>${x}</span><span>/</span>`).join('')}</div>
-      <div class="user"><span style="color:var(--mute);font-size:13px">${esc(u)}</span><div class="avatar">${esc((u[0] || 'A').toUpperCase())}</div><button class="btn btn-sm" data-a="logout">Sign out</button></div></header>
+      <div class="user"><span style="color:var(--mute);font-size:13px">${esc(u)}</span><div class="avatar">${esc((u[0] || 'A').toUpperCase())}</div>${requireLogin && !DEMO ? '<button class="btn btn-sm" data-a="logout">Sign out</button>' : ''}</div></header>
     <main class="view" id="view">${DEMO ? '<div class="banner warn"><div><b>Demo mode.</b> Nothing is saved to Firebase. Open this page from http://localhost or your Firebase Hosting address, then sign in, to save real data.</div></div>' : ''}${view}</main></div></div>`;
 }
 

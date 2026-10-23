@@ -1,0 +1,11 @@
+// TEST ONLY: anyone can read and upload images and videos up to 100 MB. Replace with storage.rules before real use.
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, delete: if true;
+      allow write: if request.resource.size < 100 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('video/.*'));
+    }
+  }
+}
