@@ -180,6 +180,7 @@ input.bad,select.bad{border-color:var(--bad)}
 const firebaseConfig = {
   apiKey: "AIzaSyAalTjSYreVdtfah0W-b-gQE6dvw9biniw",
   authDomain: "dtarks-c75b8.firebaseapp.com",
+  databaseURL: "https://dtarks-c75b8-default-rtdb.firebaseio.com",
   projectId: "dtarks-c75b8",
   storageBucket: "dtarks-c75b8.firebasestorage.app",
   messagingSenderId: "469572538926",
@@ -252,7 +253,10 @@ function restBackend() {
   const dec = v => 'stringValue' in v ? v.stringValue : 'integerValue' in v ? +v.integerValue : 'doubleValue' in v ? v.doubleValue : 'booleanValue' in v ? v.booleanValue
     : 'arrayValue' in v ? (v.arrayValue.values || []).map(dec) : 'mapValue' in v ? decF(v.mapValue.fields || {}) : null;
   const decF = f => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, dec(v)]));
-  const explain = (status, msg, where) => status === 403 ? `Permission denied by ${where}. In the Firebase console, open ${where} > Rules, paste the test rules from this repo and click Publish.`
+  const explain = (status, msg, where) => where === 'Realtime Database' ? (status === 401 || status === 403
+      ? 'Realtime Database blocked the request. In the Firebase console open Build > Realtime Database > Rules, set both ".read" and ".write" to true, and click Publish.'
+      : status === 404 ? 'Realtime Database not found. In the Firebase console open Build > Realtime Database and click Create Database, then check databaseURL in admin/firebase-config.js.' : `Realtime Database error ${status}: ${msg || 'unknown'}`)
+    : status === 403 ? `Permission denied by ${where}. In the Firebase console, open ${where} > Rules, paste the test rules from this repo and click Publish.`
     : status === 404 && noDb(msg) ? 'Firestore database not found. In the Firebase console open Build > Firestore Database and click Create database.'
     : status === 404 && where === 'Storage' ? 'Storage bucket not found. In the Firebase console open Build > Storage and click Get started.'
     : `${where} error ${status}: ${msg || 'unknown'}`;
@@ -283,22 +287,41 @@ function restBackend() {
     x.send(file);
   });
   const removeFile = path => fetch(stUrl(path), { method: 'DELETE' }).catch(() => {});
-  return {
-    onAuth: cb => { setTimeout(() => cb({ email: 'Test mode (no login)' }), 0); return () => {}; },
-    newId: () => Array.from(crypto.getRandomValues(new Uint8Array(10)), b => b.toString(36).padStart(2, '0')).join('').slice(0, 20),
+  const useRt = !!firebaseConfig.databaseURL;
+  const rt = (path, opt) => call(`${firebaseConfig.databaseURL.replace(/\/$/, '')}/${path}.json`, opt, 'Realtime Database');
+  const toArr = v => Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v) : [];
+  const norm = o => ({ ...o, plans: toArr(o.plans), gallery: toArr(o.gallery) });
+  const rtData = {
+    async listProducts() { const j = await rt('products'); return Object.entries(j || {}).map(([id, v]) => ({ ...norm(v), id })); },
+    saveProduct: p => rt(`products/${p.id}`, { method: 'PUT', body: JSON.stringify(p) }),
+    deleteProduct: id => rt(`products/${id}`, { method: 'DELETE' }),
+    getSettings: async () => (await rt('settings/company')) || {},
+    saveSettings: o => rt('settings/company', { method: 'PUT', body: JSON.stringify(o) }),
+    async ping() { await rt('_ping', { method: 'PUT', body: '{"t":1}' }); await rt('_ping'); await rt('_ping', { method: 'DELETE' }); }
+  };
+  const fsData = {
     async listProducts() { const j = await doc('products?pageSize=300'); return (j?.documents || []).map(d => ({ ...decF(d.fields || {}), id: d.name.split('/').pop() })); },
     saveProduct: p => put(`products/${p.id}`, p),
     deleteProduct: id => doc(`products/${id}`, { method: 'DELETE' }),
     async getSettings() { try { return decF((await doc('settings/company')).fields || {}); } catch (e) { if (e.status === 404 && /^Document/i.test(e.raw || '')) return {}; throw e; } },
     saveSettings: o => put('settings/company', o),
+    async ping() { await put('settings/_ping', { t: Date.now() }); await doc('settings/_ping'); await doc('settings/_ping', { method: 'DELETE' }); }
+  };
+  const data = useRt ? rtData : fsData;
+  return {
+    onAuth: cb => { setTimeout(() => cb({ email: 'Test mode (no login)' }), 0); return () => {}; },
+    newId: () => Array.from(crypto.getRandomValues(new Uint8Array(10)), b => b.toString(36).padStart(2, '0')).join('').slice(0, 20),
+    ...data,
     upload, removeFile, getToken: async () => '',
-    async ping() { await put('settings/_ping', { t: Date.now() }); await doc('settings/_ping'); await doc('settings/_ping', { method: 'DELETE' }); },
     async pingStorage() { const r = await upload('_ping/test.png', new File([await (await fetch(PNG)).blob()], 'ping.png', { type: 'image/png' }), () => {}); await removeFile(r.path); },
     async stats() {
-      const products = (await this.listProducts()).length;
-      const l = await call(`${ST}?maxResults=1000`, {}, 'Storage'), items = (l?.items || []);
-      const metas = await Promise.all(items.slice(0, 100).map(i => fetch(stUrl(i.name)).then(r => r.json()).catch(() => ({}))));
-      return { products, files: items.length, size: metas.reduce((a, m) => a + (+m.size || 0), 0), capped: items.length > 100 };
+      const products = (await this.listProducts()).length; let files = 0, size = 0, capped = false, storageErr = '';
+      try {
+        const l = await call(`${ST}?maxResults=1000`, {}, 'Storage'), items = (l?.items || []);
+        const metas = await Promise.all(items.slice(0, 100).map(i => fetch(stUrl(i.name)).then(r => r.json()).catch(() => ({}))));
+        files = items.length; size = metas.reduce((a, m) => a + (+m.size || 0), 0); capped = items.length > 100;
+      } catch (e) { storageErr = e.message; }
+      return { products, files, size, capped, storageErr };
     }
   };
 }
@@ -433,7 +456,7 @@ function usageCard() {
   const cloud = u.cloudErr ? `<div class="banner warn">${esc(u.cloudErr)}</div>` : `${c.sample ? '<div class="banner info">Sample numbers. Connect Cloudinary to see real usage.</div>' : ''}
     ${kv('Storage used', fmtBytes(c.storageBytes))}${cr ? kv('Credits used', `${(+cr.usage).toFixed(1)}${cr.limit ? ' of ' + cr.limit : ''}`) : ''}
     ${pct != null ? `<div class="prog" style="margin:4px 0 8px"><i style="width:${pct}%"></i></div>${kv('Left', cr.limit ? (cr.limit - cr.usage).toFixed(1) + ' credits' : (100 - pct).toFixed(0) + '%')}` : ''}${kv('Videos', c.videos)}${kv('Images', c.images)}`;
-  const fb = u.fbErr ? `<div class="banner warn">${esc(u.fbErr)}</div>` : `${u.fb.demo ? '<div class="banner info">Demo mode: Firebase not connected.</div>' : ''}${kv('Products in Firestore', u.fb.products)}${kv('Files in Firebase Storage', u.fb.files + (u.fb.capped ? '+' : ''))}${kv('Firebase Storage size', fmtBytes(u.fb.size))}
+  const fb = u.fbErr ? `<div class="banner warn">${esc(u.fbErr)}</div>` : `${u.fb.demo ? '<div class="banner info">Demo mode: Firebase not connected.</div>' : ''}${kv('Products saved', u.fb.products)}${u.fb.storageErr ? kv('Firebase Storage', 'Not set up') : kv('Files in Firebase Storage', u.fb.files + (u.fb.capped ? '+' : '')) + kv('Firebase Storage size', fmtBytes(u.fb.size))}
     <p style="color:var(--mute);font-size:12px;margin-top:8px">Plan quotas are shown in the Firebase console, Usage and billing.</p>`;
   return `<div class="card">${head}<div class="card-b grid2"><div><h3 style="font-size:14px;margin-bottom:6px">Cloudinary</h3>${cloud}</div><div><h3 style="font-size:14px;margin-bottom:6px">Firebase</h3>${fb}</div></div></div>`;
 }
@@ -615,7 +638,7 @@ async function runTests() {
   const show = () => out.innerHTML = rows.map(r => `<div class="check"><span class="dot ${r[1] === true ? 'ok' : r[1] === false ? 'no' : ''}">${r[1] === true ? ic('check', '') : r[1] === false ? ic('x', '') : ''}</span><div><b style="font-weight:600">${esc(r[0])}</b><div style="color:var(--mute);font-size:12px;overflow-wrap:anywhere">${esc(r[2])}</div></div></div>`).join('');
   const step = async (name, fn) => { rows.push([name, null, 'Testing…']); show(); try { rows[rows.length - 1] = [name, true, await fn()]; } catch (e) { rows[rows.length - 1] = [name, false, e.code || e.message || String(e)]; } show(); };
   const file = new File([await (await fetch(PNG)).blob()], 'ping.png', { type: 'image/png' });
-  await step('Firestore write and read', async () => { await B.ping(); return DEMO ? 'Demo mode: Firebase was not contacted' : 'Wrote and read back a test document'; });
+  await step(firebaseConfig.databaseURL ? 'Realtime Database write and read' : 'Firestore write and read', async () => { await B.ping(); return DEMO ? 'Demo mode: Firebase was not contacted' : 'Wrote and read back a test document'; });
   await step('Firebase Storage upload', async () => { await B.pingStorage(); return DEMO ? 'Demo mode: Firebase was not contacted' : 'Uploaded and deleted a test image'; });
   await step('Cloudinary upload', async () => { if (!cloudOn()) throw new Error('Enter cloud name and upload preset, then save.'); const r = await cloudUpload(file, '_tests', () => {}); return 'Uploaded: ' + r.url; });
   await step('Cloudinary usage', async () => { const u = await fetchCloudUsage(); return `${u.sample ? 'Sample data. ' : ''}Storage ${fmtBytes(u.storageBytes)}, ${u.videos} videos, ${u.images} images`; });

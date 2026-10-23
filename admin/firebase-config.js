@@ -3,6 +3,7 @@
 export const firebaseConfig = {
   apiKey: "AIzaSyAalTjSYreVdtfah0W-b-gQE6dvw9biniw",
   authDomain: "dtarks-c75b8.firebaseapp.com",
+  databaseURL: "https://dtarks-c75b8-default-rtdb.firebaseio.com",
   projectId: "dtarks-c75b8",
   storageBucket: "dtarks-c75b8.firebasestorage.app",
   messagingSenderId: "469572538926",
