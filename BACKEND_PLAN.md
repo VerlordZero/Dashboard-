@@ -56,7 +56,7 @@ profiles(id uuid pk = auth.users.id, role, name, email)
 products(id, name, kind, status draft|published, short_desc, description, thumbnail, main_image, gallery jsonb, video, created_at, updated_at)
 plans(id, product_id fk, name, users_included, original_price, selling_price, extra_user_price, sort)
 duration_discounts(months pk, percent)            -- 1, 3, 12, 48 by default
-clients, businesses, contacts, client_documents, client_notes   -- full definition in CLIENTS.md (individual or organisation, many businesses per client, India and international tax details)
+clients, businesses, contacts, client_documents, client_notes   -- full definition in the Clients module of FRONTEND_ADMIN.md (individual or organisation, many businesses per client, India and international tax details)
 client_users(client_id fk, contact_id fk, user_id fk -> auth.users, role client_owner|client_member)   -- links client logins to a client
 payments(id, invoice_id fk, provider upi_manual|bank_transfer|razorpay|custom, utr, proof_url, verified_by, verified_at, provider_order_id, provider_payment_id, amount_paise, status created|paid|failed|refunded, raw jsonb, created_at)
 subscriptions(id, client_id fk, business_id fk, product_id fk, plan_id fk, seats int, months int,
@@ -152,6 +152,8 @@ Things to confirm before launch (I cannot verify current pricing from here): the
 Safety rules for the manual flow: the amount and invoice number come from the server, a UTR can be used once, only an admin or owner can verify, every verification is written to the audit log, and a subscription activates only after verification.
 
 ## 9. Invoices and tax **DECIDE**
+
+**Decided so far:** the business has no GST or Udyam registration today. Invoices start in `tax_mode = none` (plain invoice, no tax lines). The company may later register for GST and become a private limited company with its own PAN. The server therefore keeps an **issuer profile** (legal name, PAN, GSTIN, address, invoice number series) with an effective date, and a company `tax_mode` switch. Old invoices are never changed. Details in the Tax mode section of `FRONTEND_ADMIN.md`.
 
 - GST invoices (GSTIN, HSN or SAC code, tax breakup)? Or simple invoices?
 - Invoice number format, for example `INV-2026-0001`.
