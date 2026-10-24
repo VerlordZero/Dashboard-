@@ -58,7 +58,7 @@ plans(id, product_id fk, name, users_included, original_price, selling_price, ex
 duration_discounts(months pk, percent)            -- 1, 3, 12, 48 by default
 customers(id, name, email, phone, company, gst_no, address, created_at)
 customer_users(customer_id fk, user_id fk -> auth.users, role client_owner|client_member)   -- links client logins to a customer
-payments(id, invoice_id fk, provider razorpay|custom, provider_order_id, provider_payment_id, amount_paise, status created|paid|failed|refunded, raw jsonb, created_at)
+payments(id, invoice_id fk, provider upi_manual|bank_transfer|razorpay|custom, utr, proof_url, verified_by, verified_at, provider_order_id, provider_payment_id, amount_paise, status created|paid|failed|refunded, raw jsonb, created_at)
 subscriptions(id, customer_id fk, product_id fk, plan_id fk, seats int, months int,
               start_date, end_date, status active|expiring|payment_due|expired|suspended,
               price_total, paid bool, licence_key, created_at)
@@ -132,6 +132,25 @@ Open choice **DECIDE**: one-off term payments only, or auto-renewing subscriptio
 
 Secrets (Razorpay key secret, webhook secret) live only in server secrets, never in either portal.
 
+### 8b. Avoiding the gateway fee (about 2%)
+
+Building our own card processor is not possible. Moving card money needs a licence from the RBI (Payment Aggregator) and card-industry security certification, which costs far more than 2%. What we can do is **avoid the gateway for most payments** and keep one only as a backup. All options plug into the same payment adapter, so the portals do not change.
+
+| Option | Fee | How it confirms | Notes |
+|---|---|---|---|
+| **Direct UPI to the company bank account** (QR and `upi://` link with exact amount and invoice number) | Normally none | Client enters the UTR (bank reference) and optionally uploads a screenshot. The team checks the bank statement and clicks **Verify** in the team portal. | Easy to build. Needs a person to verify. Screenshots can be faked, so the bank statement is the proof. |
+| **Bank transfer (NEFT / IMPS / RTGS)** with the company account details on the invoice | Normally none | Same as above, or automatic if the bank offers a **virtual account per client** with a webhook. | Virtual accounts or bank API banking usually carry a small flat fee and need a current account. Ask your bank. |
+| **Razorpay or another gateway** | About 2% | Automatic by webhook. | Keep for cards and international clients, or hide it behind a "Pay by card" button. Optionally pass the fee to the client or give a small discount for UPI and bank transfer. |
+
+Recommended path:
+1. Phase A: manual UPI and bank transfer with a **Verify payment** screen. Zero fees, no outside dependency.
+2. Phase B: ask your bank about virtual accounts or UPI collection APIs to automate the checking.
+3. Phase C: add Razorpay or the other provider only for cards, if clients ask for it.
+
+Things to confirm before launch (I cannot verify current pricing from here): the actual fee on UPI at each provider, your bank's virtual-account pricing, and GST treatment of the invoices.
+
+Safety rules for the manual flow: the amount and invoice number come from the server, a UTR can be used once, only an admin or owner can verify, every verification is written to the audit log, and a subscription activates only after verification.
+
 ## 9. Invoices and tax **DECIDE**
 
 - GST invoices (GSTIN, HSN or SAC code, tax breakup)? Or simple invoices?
@@ -148,7 +167,7 @@ Provider (Resend, Brevo or Amazon SES). Daily scheduled job checks end dates and
 1. **Foundation**: Supabase project, tables, RLS, login, roles, owner account. Move products and plans over.
 2. **Secure media**: Edge Function for Cloudinary (signed uploads, list, delete, usage). Remove demo keys from the repo and rotate them.
 3. **Subscriptions engine**: quote, create subscription, extend, seats, suspend, status job, licence check.
-4. **Payments and invoices**: checkout, webhook, invoice PDF, email.
+4. **Payments and invoices**: UPI and bank-transfer flow with the Verify screen, invoice PDF, email. Card gateway later as an extra adapter.
 5. **Services and orders**: stages, files, payment, delivery notifications.
 6. **Client portal and public shop**: client login, own subscriptions, invoices, payments, orders.
 7. **Hardening**: audit log review, backups and restore test, rate limits, security review, load check.
@@ -157,7 +176,7 @@ Provider (Resend, Brevo or Amazon SES). Daily scheduled job checks end dates and
 
 1. Supabase or stay on Firebase?
 2. Roles: owner, admin only, or also staff?
-3. Which "custom payment provider" do you mean (name and docs link)? One-off or auto-renew?
+3. Start with manual UPI and bank transfer? Do you want a card option later (Razorpay or the other provider, name and docs link)? One-off or auto-renew?
 4. GST invoices needed?
 5. Seat added mid-term: pro-rate or full month? Grace days after expiry?
 6. Client portal: can a customer invite their own team members? Do you want "view as client" for support?
