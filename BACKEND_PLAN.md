@@ -56,16 +56,16 @@ profiles(id uuid pk = auth.users.id, role, name, email)
 products(id, name, kind, status draft|published, short_desc, description, thumbnail, main_image, gallery jsonb, video, created_at, updated_at)
 plans(id, product_id fk, name, users_included, original_price, selling_price, extra_user_price, sort)
 duration_discounts(months pk, percent)            -- 1, 3, 12, 48 by default
-customers(id, name, email, phone, company, gst_no, address, created_at)
-customer_users(customer_id fk, user_id fk -> auth.users, role client_owner|client_member)   -- links client logins to a customer
+clients, businesses, contacts, client_documents, client_notes   -- full definition in CLIENTS.md (individual or organisation, many businesses per client, India and international tax details)
+client_users(client_id fk, contact_id fk, user_id fk -> auth.users, role client_owner|client_member)   -- links client logins to a client
 payments(id, invoice_id fk, provider upi_manual|bank_transfer|razorpay|custom, utr, proof_url, verified_by, verified_at, provider_order_id, provider_payment_id, amount_paise, status created|paid|failed|refunded, raw jsonb, created_at)
-subscriptions(id, customer_id fk, product_id fk, plan_id fk, seats int, months int,
+subscriptions(id, client_id fk, business_id fk, product_id fk, plan_id fk, seats int, months int,
               start_date, end_date, status active|expiring|payment_due|expired|suspended,
               price_total, paid bool, licence_key, created_at)
 seat_changes(id, subscription_id, delta, price_delta, created_at)
-invoices(id, number, customer_id, subscription_id null, order_id null, amount, tax, status draft|sent|paid|void, due_date, paid_at, pdf_url)
+invoices(id, number, client_id, business_id, currency, exchange_rate, subscription_id null, order_id null, amount, tax, status draft|sent|paid|void, due_date, paid_at, pdf_url)
 services(id, category, name, note, price, listed bool)
-orders(id, customer_id, service_id, stage brief|in_progress|review|delivered, paid bool, due_date, files jsonb)
+orders(id, client_id, business_id null, service_id, stage brief|in_progress|review|delivered, paid bool, due_date, files jsonb)
 media(id, provider cloudinary, public_id, url, type, bytes, uploaded_by, created_at)
 audit_log(id, actor, action, entity, entity_id, at, details jsonb)
 ```

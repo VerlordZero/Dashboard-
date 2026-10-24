@@ -74,7 +74,7 @@ Required component states: default, hover, focus (visible outline), disabled, lo
 | `#/dashboard` | Dashboard | KPI cards (products, published, drafts, plans, active subscriptions, expiring in 30 days, unpaid amount, open jobs), "Needs attention" list (expired, payment due, expiring, unpaid orders), recent activity, usage card (storage and credits) |
 | `#/products` | Product list | Search, status filter, table with thumbnail, name, category, status, plan count, lowest price, edit, delete (with confirm) |
 | `#/products/new`, `#/products/edit/:id` | Product form | Name, short and full description, category, status. **Plans repeater**: name, users included, original price, selling price, extra-user price, live discount display. **Media**: thumbnail, main image, up to 5 gallery images, one video, each with progress, preview, remove. Sticky save bar. Validation list at top on save |
-| `#/customers` | Customers | List, search, add, edit, view subscriptions and invoices per customer |
+| `#/clients`, `#/clients/new`, `#/clients/:id` | Clients | Full spec in `CLIENTS.md`: list with filters, add wizard (individual or organisation, several businesses, contacts), detail tabs (overview, businesses, contacts, subscriptions, orders, invoices and payments, documents, activity) |
 | `#/subscriptions` | Subscriptions | Filters (all, active, expiring, needs action). Card or row shows customer, product and plan, seats used / allowed, start, end, days left, status, amount. Actions: renew +N months, add seat, mark paid, send reminder, suspend / resume |
 | `#/services` | Services and orders | Stage filter (Brief, In progress, Review, Delivered), order cards with client, service, price, due date, paid flag, "move to next stage", "mark paid". Price list with list/unlist switch |
 | `#/invoices` | Invoices | List, filter by status, create, send, mark paid, void, download PDF |
@@ -153,7 +153,7 @@ auth.signIn(email) / auth.verify(code) / auth.signOut() / auth.me()
 shop.listProducts() / shop.getProduct(id) / shop.quote({productId, planId, seats, months})
 shop.checkout({quote, customer})
 admin.products.list/get/save/remove
-admin.customers.list/get/save
+admin.clients.list/get/save   admin.businesses.save/remove   admin.contacts.save/remove/invite
 admin.subscriptions.list/extend/addSeat/suspend/resume/markPaid/remind
 admin.services.list/save/remove      admin.orders.list/advance/markPaid
 admin.invoices.list/create/send/markPaid/void
@@ -174,16 +174,18 @@ Product      { "id": "", "name": "", "kind": "Software", "status": "draft|publis
                "thumbnail": {"url":"","publicId":""}, "mainImage": {}, "gallery": [], "video": {},
                "plans": [Plan], "createdAt": 0, "updatedAt": 0 }
 Plan         { "id": "", "name": "", "users": 5, "originalPrice": 1999, "sellingPrice": 999, "extraUserPrice": 120 }
-Customer     { "id": "", "name": "", "email": "", "phone": "", "company": "", "gstNo": "", "address": "" }
-Subscription { "id": "", "customerId": "", "productId": "", "planId": "", "seats": 7, "seatsUsed": 5,
+Client       { "id": "", "displayName": "", "kind": "individual|organisation", "status": "lead|active|inactive|blocked", "country": "", "preferredCurrency": "INR" }
+Business     { "id": "", "clientId": "", "legalName": "", "entityType": "", "isRegistered": true, "gstin": "", "pan": "", "foreignTaxId": "", "country": "", "state": "", "currency": "INR", "billingAddress": {}, "invoiceEmail": "" }
+Contact      { "id": "", "clientId": "", "businessId": null, "name": "", "email": "", "phone": "", "portalAccess": false }
+Subscription { "id": "", "clientId": "", "businessId": "", "productId": "", "planId": "", "seats": 7, "seatsUsed": 5,
                "months": 12, "startDate": "2026-10-24", "endDate": "2027-10-24",
                "status": "active|expiring|payment_due|expired|suspended", "priceTotal": 0, "paid": true, "licenceKey": "" }
-Invoice      { "id": "", "number": "INV-2026-0001", "customerId": "", "amount": 0, "tax": 0,
+Invoice      { "id": "", "number": "INV-2026-0001", "clientId": "", "businessId": "", "amount": 0, "tax": 0,
                "status": "draft|sent|paid|void", "dueDate": "", "pdfUrl": "" }
 Payment      { "id": "", "invoiceId": "", "method": "upi_manual|bank_transfer|card", "utr": "", "proofUrl": "",
                "status": "pending|verified|rejected", "amount": 0 }
 Service      { "id": "", "category": "", "name": "", "note": "", "price": 0, "listed": true }
-Order        { "id": "", "customerId": "", "serviceId": "", "stage": "brief|in_progress|review|delivered",
+Order        { "id": "", "clientId": "", "businessId": null, "serviceId": "", "stage": "brief|in_progress|review|delivered",
                "paid": false, "dueDate": "", "files": [] }
 Quote        { "monthly": 0, "gross": 0, "discountPercent": 0, "total": 0, "startDate": "", "endDate": "", "extraUsers": 0 }
 ```
