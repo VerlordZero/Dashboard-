@@ -24,12 +24,29 @@ Split of work: you (with Antigravity) build the design and the front-end JavaScr
 
 Recommendation: move to **Supabase**. The current Firebase data is only a few test products and can be re-entered or exported.
 
+## 2b. Two portals (decided)
+
+| | Team portal (ours) | Client portal (customers) |
+|---|---|---|
+| Who | owner, admin, staff | Customers and their team members |
+| Address | for example `admin.yourdomain.com` | for example `app.yourdomain.com` |
+| Login | Team accounts, two-step verification for owner and admin | Email code or magic link, no password to leak |
+| Can do | Products, plans, customers, subscriptions, services, invoices, media, payments, reports | See own subscriptions (plan, seats, end date), renew, add seats, pay, download invoices, request and track design/video/motion orders, download delivered files |
+| Sees | Everything their role allows | Only rows linked to their own customer account |
+
+Rules that keep the two apart:
+- Two separate front-end builds on two addresses. The client portal contains no admin code.
+- Client users can never call `admin.*` functions. The server checks the role on every call.
+- Database rules link each client login to a customer account, so a client can read only their own rows.
+- CORS, rate limits and login settings are set separately per portal.
+- Optional **DECIDE**: "view as client" for support, always written to the audit log.
+
 ## 3. Roles
 
 - **owner**: everything, including adding and removing admins and viewing audit logs.
 - **admin**: products, plans, customers, subscriptions, services, invoices, media.
 - **staff** (optional) **DECIDE**: read customers and orders, update service stages, cannot delete or see billing totals.
-- **customer** (later): sees only their own subscriptions, invoices and orders.
+- **client_owner / client_member**: client portal users. Owner can add seats and pay. Member can view. Both see only their own company's data.
 - **public**: reads only published products, plans and services.
 
 ## 4. Data model (Postgres sketch)
@@ -40,6 +57,8 @@ products(id, name, kind, status draft|published, short_desc, description, thumbn
 plans(id, product_id fk, name, users_included, original_price, selling_price, extra_user_price, sort)
 duration_discounts(months pk, percent)            -- 1, 3, 12, 48 by default
 customers(id, name, email, phone, company, gst_no, address, created_at)
+customer_users(customer_id fk, user_id fk -> auth.users, role client_owner|client_member)   -- links client logins to a customer
+payments(id, invoice_id fk, provider razorpay|custom, provider_order_id, provider_payment_id, amount_paise, status created|paid|failed|refunded, raw jsonb, created_at)
 subscriptions(id, customer_id fk, product_id fk, plan_id fk, seats int, months int,
               start_date, end_date, status active|expiring|payment_due|expired|suspended,
               price_total, paid bool, licence_key, created_at)
@@ -83,6 +102,9 @@ The front end calls these. Names are proposals. Claude builds them, the front en
 | Call | Who | Purpose |
 |---|---|---|
 | `GET products?status=published` (with plans) | public | Shop listing |
+| `client.me`, `client.subscriptions.list`, `client.subscription.renew/add_seats` | client | Client portal: own subscriptions |
+| `client.invoices.list/download`, `client.pay(invoice_id)` | client | Client portal: invoices and payment |
+| `client.orders.list/create`, `client.files.download` | client | Client portal: creative service orders |
 | `quote(product_id, plan_id, seats, months)` | public | Server-calculated price and end date |
 | `create_checkout(quote, customer)` | public | Start payment, returns payment link |
 | `payment_webhook` | payment provider | Mark paid, create subscription, invoice and licence key |
@@ -95,9 +117,20 @@ The front end calls these. Names are proposals. Claude builds them, the front en
 
 Front-end rules to keep it safe: never put secrets or service keys in the front end, never calculate the final price in the browser, never decide access in the browser.
 
-## 8. Payments **DECIDE**
+## 8. Payments (Razorpay first, other provider later)
 
-Suggested for India: **Razorpay** (UPI, cards, net banking, subscriptions). Alternatives: Stripe, Cashfree. Needs: business KYC, API key and webhook secret (stored server-side). Question: one-off term payments only, or auto-renewing subscriptions?
+**Razorpay** is the first provider: UPI, cards, net banking. Flow:
+1. Client portal or shop asks the server for a checkout. The server recalculates the price, creates a Razorpay **order** (amount in paise) and a `payments` row with status `created`.
+2. The browser opens Razorpay Checkout with that order id. The browser never sends or sets the amount.
+3. Razorpay calls our **webhook**. The server verifies the signature (HMAC-SHA256 with the webhook secret), then marks the payment paid, activates or renews the subscription, issues the invoice and licence, and emails the customer. Handling is idempotent, so a repeated webhook does nothing twice.
+4. Refunds run from the team portal through the server.
+5. Build and test in Razorpay **test mode** first. Live keys only after KYC and a full test.
+
+**Other provider ("custom payment provider")**: the server code uses a small payment adapter with the same four functions: `createCheckout`, `verifyWebhook`, `getStatus`, `refund`. Razorpay is the first adapter. Adding another provider means writing one more adapter, with no changes to the portals. To build it I need that provider's name and API documentation (checkout method, webhook signing, refund API, fees).
+
+Open choice **DECIDE**: one-off term payments only, or auto-renewing subscriptions (Razorpay Subscriptions API)? Start with one-off and renewal reminders unless you want auto-renew.
+
+Secrets (Razorpay key secret, webhook secret) live only in server secrets, never in either portal.
 
 ## 9. Invoices and tax **DECIDE**
 
@@ -117,17 +150,17 @@ Provider (Resend, Brevo or Amazon SES). Daily scheduled job checks end dates and
 3. **Subscriptions engine**: quote, create subscription, extend, seats, suspend, status job, licence check.
 4. **Payments and invoices**: checkout, webhook, invoice PDF, email.
 5. **Services and orders**: stages, files, payment, delivery notifications.
-6. **Customer area and public shop**: customer login, own subscriptions and invoices.
+6. **Client portal and public shop**: client login, own subscriptions, invoices, payments, orders.
 7. **Hardening**: audit log review, backups and restore test, rate limits, security review, load check.
 
 ## 12. Questions for you
 
 1. Supabase or stay on Firebase?
 2. Roles: owner, admin only, or also staff?
-3. Payment provider and one-off versus auto-renew?
+3. Which "custom payment provider" do you mean (name and docs link)? One-off or auto-renew?
 4. GST invoices needed?
 5. Seat added mid-term: pro-rate or full month? Grace days after expiry?
-6. Do customers log in to a portal, or only receive licence keys and invoices by email?
+6. Client portal: can a customer invite their own team members? Do you want "view as client" for support?
 7. Email provider preference?
 8. Where will the final site be hosted (Netlify, Vercel, other) and what domain?
 9. Is there any customer data you must keep in India (data residency)?
@@ -138,3 +171,5 @@ Provider (Resend, Brevo or Amazon SES). Daily scheduled job checks end dates and
 - Your answers to section 12 (even partial).
 - A new Supabase project (free tier is fine to start) and the project URL plus the `anon` key. The `service_role` key goes only into Edge Function secrets, never into chat, files or the front end.
 - The list of admin email addresses.
+- Razorpay test-mode key id (the key secret and webhook secret go only into server secrets) and the name and docs of the other payment provider, if used.
+- Your two portal addresses (or placeholders for now).
