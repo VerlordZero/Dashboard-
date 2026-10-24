@@ -68,13 +68,28 @@ Required component states: default, hover, focus (visible outline), disabled, lo
 
 ## 5. Screens (team portal)
 
+### Navigation
+
+- **Dashboard** is its own page, the first item. One short overview of everything with a link into each area (details below).
+- A **top menu** follows. **Clients is the first item.** The rest (products, subscriptions, services and orders, invoices, payments, media, settings) will be ordered when the owner decides.
+- **Clients sub menu:** `All clients` and `Add client`. No separate menu for companies: companies live inside clients. (Optional later: a `Companies` list that searches every company by name or GSTIN across all clients.)
+- Same menu on phones as a slide-in drawer.
+
+### Dashboard (short on purpose)
+
+One screen, no scrolling needed on a laptop for the key numbers. Every card is a link to its area.
+- Row of small cards: clients, active subscriptions, expiring in 30 days, unpaid amount, open creative jobs, payments waiting for verification.
+- **Needs attention** list (expired, payment due, expiring, unpaid orders, proofs to verify), each row opens the right record.
+- **Quick actions**: Add client, Add product, New invoice, Verify payments.
+- Small usage line (storage and credits) only when the server is connected.
+
 
 | Route | Screen | Must have |
 |---|---|---|
-| `#/dashboard` | Dashboard | KPI cards (products, published, drafts, plans, active subscriptions, expiring in 30 days, unpaid amount, open jobs), "Needs attention" list (expired, payment due, expiring, unpaid orders), recent activity, usage card (storage and credits) |
+| `#/dashboard` | Dashboard | See "Dashboard (short on purpose)" above |
 | `#/products` | Product list | Search, status filter, table with thumbnail, name, category, status, plan count, lowest price, edit, delete (with confirm) |
 | `#/products/new`, `#/products/edit/:id` | Product form | Name, short and full description, category, status. **Plans repeater**: name, users included, original price, selling price, extra-user price, live discount display. **Media**: thumbnail, main image, up to 5 gallery images, one video, each with progress, preview, remove. Sticky save bar. Validation list at top on save |
-| `#/clients`, `#/clients/new`, `#/clients/:id` | Clients | See "Clients module" below |
+| `#/clients`, `#/clients/new`, `#/clients/:id` | Clients (first top-menu item) | Sub menu: All clients, Add client. See "Clients module" below |
 | `#/subscriptions` | Subscriptions | Filters (all, active, expiring, needs action). Card or row shows customer, product and plan, seats used / allowed, start, end, days left, status, amount. Actions: renew +N months, add seat, mark paid, send reminder, suspend / resume |
 | `#/services` | Services and orders | Stage filter (Brief, In progress, Review, Delivered), order cards with client, service, price, due date, paid flag, "move to next stage", "mark paid". Price list with list/unlist switch |
 | `#/invoices` | Invoices | List, filter by status, create, send, mark paid, void, download PDF |
@@ -166,11 +181,27 @@ Checks: GSTIN format and checksum, PAN format, duplicate warning on same email o
 - Columns: name, kind, country, number of businesses, active subscriptions, open orders, unpaid amount, status.
 - Buttons: Add client, Import from file (later).
 
-**Add client** (short steps, with a quick-add for a minimum of name and email)
-1. Choose: **Individual** or **Organisation**.
-2. If organisation: add one or more businesses (legal name, registered yes or no, tax ids, country, state, currency). An individual gets a personal bill-to automatically.
-3. Add contacts and choose who gets portal access.
-4. Review and save.
+**Add client** (route `#/clients/new`)
+
+Step 1: choose what kind of client this is. Three big cards:
+
+| Choice | Use when | What the form asks |
+|---|---|---|
+| **Solo (a person, no company)** | Freelancer or individual buyer | Person name, email, phone, country and state, address. A personal bill-to is created automatically, so invoices go to the person. |
+| **Person with a company** (one or more) | The client you talk to owns or works for one or several companies | Person details, then **Add company** for the first company (legal name, registered yes or no, GSTIN or other tax id if any, country, state, currency, billing address, invoice email). **Add another company** repeats the block as many times as needed. Mark one as the default for invoices. |
+| **Company account only** | You deal with the company directly and have no person name yet | Company details only. The client name shown in lists is the company name. People can be added later (optional). |
+
+Step 2: the form for the chosen card, with a live summary on the side ("1 client, 2 companies").
+Step 3: review and **Save**. After saving, the client page opens with buttons: Add subscription, Add order, Create invoice.
+
+Rules:
+- Minimum to save: Solo needs a person name and an email or phone. Company-only needs a company legal name and an email or phone. Person with company needs a person name, at least one company legal name, and an email or phone.
+- A **company account has no required person**. A person can be added later under Contacts.
+- Each company can be registered or not. Tax fields are optional and follow the company's own tax mode (see "Tax mode").
+- A quick-add (name and email only) creates a Solo client that can be completed later.
+- Duplicate warning if the email, phone or tax id already exists, with a link to open that client instead.
+
+**Changing a client later** (from the client page): add a company to a solo client (the person stays, the personal bill-to stays available for old invoices), add or remove a company, add a person to a company-only account, set the default bill-to, mark a company inactive. Old invoices always keep the bill-to they were issued to.
 
 **Client detail** (tabs)
 - **Overview**: status, account manager, totals (active subscriptions, unpaid, lifetime billed), alerts (expiring, payment due).
@@ -194,7 +225,7 @@ contacts(id, client_id fk, business_id fk null, name, role, email, phone, whatsa
 client_documents(id, client_id fk, business_id null, type, file_path, uploaded_by, created_at)
 client_notes(id, client_id fk, author, body, created_at)
 ```
-Rules: a business and contact must belong to the same client; an individual always has exactly one `personal` business; a subscription's business must belong to its client.
+Rules: a business and contact must belong to the same client; a **solo** client has exactly one `personal` business and one contact; a **company-only** client has one or more businesses and **may have no contacts**; a client with a person and companies has one or more contacts and one or more businesses; a subscription's business must belong to its client. `display_name` is the person's name for solo clients, otherwise the default company's name unless the owner types a different one.
 
 ### Open questions (answer when ready)
 1. International pricing: fixed USD or EUR prices, or INR converted at that day's rate?
