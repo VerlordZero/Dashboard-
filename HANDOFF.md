@@ -1,69 +1,58 @@
-# Company dashboard: handoff notes
+# Project handoff (read this first)
 
-Written at the end of the first working session so the project can continue in a local chat.
+Company platform: sells software (inventory, CRM and others) by plan, extra users and duration, and also creative services (graphic design, video editing, motion graphics). Owner works with Antigravity (design and front-end JavaScript) and Claude (backend, security, plans).
 
-## What exists
+## Files in this project
 
-| Piece | Where | What it is |
-|---|---|---|
-| Mobile prototype | `index.html` | Static sample-data demo: Home, Customers (subscriptions with seat limits and end dates), Products and pricing, Services (design, video, motion), Shop (plan + extra users + months, price and expiry date). Not connected to anything. |
-| Admin console | `admin/` (`index.html`, `app.js`, `styles.css`, `firebase-config.js`) | Desktop corporate dashboard. Dashboard, Media library, Products (list, add, edit, delete), Settings (Branding logo, Company, Integrations). |
-| Single-file console | `admin-standalone.html` | The same console in one file. Rebuild with `python3 build-standalone.py`. |
-| Local helper | `server/cloudinary-server.js`, `server/core.js`, `server/start-helper.bat` | Small Node program (Node 18+, no packages). Serves the console at `http://localhost:8787` and talks to Cloudinary for the Media library and usage numbers. |
-| Netlify version of the helper | `netlify/functions/cloudinary.js`, `netlify.toml` | Same logic as a Netlify function with a shared `ADMIN_CODE`. Written and tested against a fake Cloudinary, never deployed. |
-| Old Firebase function | `functions/` | Earlier version of the helper for Firebase Functions. Not needed. |
-| Rules | `firestore.rules`, `storage.rules` (proper), `firestore.test.rules`, `storage.test.rules`, `database.test.rules.json` (open, test only) | |
+| File | What it is |
+|---|---|
+| `HANDOFF.md` | This file. Current state, decisions, next steps, and the prompt to start a new chat |
+| `BACKEND_PLAN.md` | Backend and security plan: platform choice, roles, data model, business rules, security, payments, phases, open questions |
+| `FRONTEND_ADMIN.md` | Brief for the **team (admin) portal** front end: tech rules, folder structure, **design system**, navigation, every screen, Clients module, tax mode, data layer (`api.js` mock then real), entity shapes, security, definition of done, prompt |
+| `FRONTEND_CLIENT.md` | Client portal and public shop. **ON HOLD**, different design to come later. Draft of data and rules only |
+| `README.md` | Short run and setup notes |
+| `design/reference-dashboard.png` | Look and feel reference for the team portal (use its layout and style, not its violet colour, not its "Upgrade to Pro" card) |
 
-## How data flows (current setup)
+Code that exists (all demo quality):
+- `index.html`: mobile prototype with sample data.
+- `admin/` and `admin-standalone.html`: working admin console that saves to Firebase and Cloudinary. It will be replaced by the new front end.
+- `server/`: local Cloudinary helper (Media library and usage). `netlify/functions/` and `functions/` hold older hosted versions of the same helper.
+- Rule files for Firebase (open test rules and proper rules).
 
-- **Products and settings** are saved to the Firebase **Realtime Database** at `https://dtarks-c75b8-default-rtdb.firebaseio.com`, over plain HTTPS (no Firebase SDK, no login). Paths: `products/{id}`, `settings/company`.
-- **Product images, video and logo** upload straight from the browser to **Cloudinary** (cloud `e956iksj`, unsigned preset `dashboard_unsigned`). The link and public id are saved inside the product record.
-- If Cloudinary is not configured, files go to Firebase Storage instead. The project has no Storage bucket yet.
-- **Media library and usage numbers** need the helper running, because Cloudinary does not let browsers call its admin service (confirmed in testing: the browser blocks it).
+## Decisions made so far
 
-## How to run it locally
+- **Two portals:** team portal (internal) and client portal (customers). The client portal gets a different design and structure and shows only a few menus such as Overview. It is on hold.
+- **Team portal design:** follow `design/reference-dashboard.png`: 5-icon rail, dark rounded panel with search (Ctrl+K), nested menu with count badges, pinned items, cards, pill tabs, tables with checkboxes, floating bulk-action bar. Default colour is a **medium-blue to deep-blue gradient** (violet preset kept as an option). **Light and dark modes** with a switch. Remove the "Upgrade to Pro" card.
+- **Menu:** Dashboard (short overview of everything) first, then Clients (All clients, Add client), then Catalog, Billing, Orders, Settings.
+- **Clients:** a client is a solo person, a person with one or more companies, or a company account with no person name. Companies (bill-to) and contacts are separate records.
+- **Tax:** no GST and no Udyam today. Invoices start in `tax_mode = none`. If turnover grows the owner plans to register for GST and become a private limited company. The software must switch later without changing old invoices. The accountant confirms the exact rules.
+- **Payments:** avoid the ~2% gateway fee. Start with manual UPI and bank transfer (client enters the UTR, team clicks Verify). Add Razorpay or another gateway later only for cards.
+- **Backend platform:** planned move to **Supabase** (Postgres, row security, login, Edge Functions for secrets). Not started. Current demo data is in the Firebase Realtime Database.
+- **Build approach:** front end first against a mock `api.js`, then swap in the real backend. The API function names and data shapes in `FRONTEND_ADMIN.md` are the contract with the backend.
 
-1. Install Node.js 18 or newer.
-2. Not needed for everyday work. Media library and usage need a hosted server (Netlify function or Supabase), see below.
-3. Open `http://localhost:8787`.
+## Current demo setup (not secure)
 
-Without the helper the console still works for products, plans and uploads. Only the Media library and Cloudinary usage numbers need it.
+- Firebase project `dtarks-c75b8`, Realtime Database `https://dtarks-c75b8-default-rtdb.firebaseio.com`, **open rules**, no login. Storage bucket not created.
+- Cloudinary cloud `e956iksj`, unsigned upload preset `dashboard_unsigned`. The Cloudinary **API key and secret are in plain text in `server/cloudinary-server.js`** (demo only). The secret was also pasted in chat. **Regenerate it in Cloudinary under API Keys** and move it to a real server secret before launch.
+- Cloudinary blocks browsers from listing or deleting files, so the Media library needs a server. Uploads and showing images need no server.
 
-## Where to change settings
+## Things learned
 
-- `admin/firebase-config.js`: Firebase config (`databaseURL` selects Realtime Database; remove that line to use Firestore instead) and Cloudinary cloud name and preset.
-- `server/cloudinary-server.js`: demo Cloudinary API key and secret (see Security).
-- Settings, Integrations in the console: override cloud name, preset and helper address; Cloudinary connection tests.
+- The Firestore database in this project is named `default`, not `(default)`.
+- The Firebase SDK failed with "client is offline" when an ad blocker blocked Firestore, so the demo uses plain REST calls.
+- Double-clicking an HTML file works for saving to Firebase and uploading to Cloudinary. Firebase login does not work from a file.
 
-## Security status: DEMO, NOT SECURE
+## Open questions (full list in `BACKEND_PLAN.md` section 12)
 
-- Realtime Database rules are open: `.read` and `.write` are `true`. Anyone with the address can read, change and delete data.
-- The Cloudinary API key and secret are written in plain text in `server/cloudinary-server.js`. The secret was also pasted into chat and an earlier version of the repo. **Regenerate it in Cloudinary, API Keys**, and move it to a real server secret before launch.
-- The unsigned upload preset lets anyone who knows the cloud name upload to the account.
-- A yellow bar at the top of every console screen says this for the team.
+Supabase confirmation, roles (owner, admin, staff), seat pricing when added mid-term, grace days after expiry, email provider, hosting and domains, international pricing (fixed USD or converted INR), first admin emails, existing client list to import, logo file and exact logo colours.
 
-## Things learned (so they are not repeated)
+## Next steps
 
-- Firestore database in this project is named `default`, not `(default)`. The REST code tries both.
-- Firestore returned "client is offline" through the Firebase SDK when an ad blocker blocked `firestore.googleapis.com`. The console now uses REST calls to avoid this.
-- `auth/configuration-not-found` means Authentication was never switched on. The login screen was removed for the demo.
-- Cloudinary's admin service (list, usage, delete) cannot be called from a browser. It needs a server.
-- Opening an HTML file by double-click works for saving to Firebase and uploading to Cloudinary. Firebase Auth would not work from a file.
+1. Antigravity builds the team portal from `FRONTEND_ADMIN.md` (steps 1 and 2 first: shared files, mock API, shell, Dashboard, Clients). Review the result against the definition of done.
+2. Owner sends the logo and exact colours, and answers the open questions.
+3. Claude starts the backend phase 1 (Supabase project, tables, row security, login, roles) once the owner creates the Supabase project and shares its URL and `anon` key. The `service_role` key never goes into chat or files.
+4. Later: media server function, subscriptions engine, payments verification, invoices, then the client portal with its own design.
 
-## Not built yet
+## Prompt to start a new chat (copy and paste)
 
-- Customers, subscriptions and invoices screens (the mobile prototype shows the idea: plan, seats, months, end date, reminders, lock on expiry).
-- The public shop page that reads published products.
-- Login and roles: admin list, rules so only admins write, public read for published products only.
-- Move data to Firestore (better queries and rules). Existing products in Realtime Database do not copy over automatically.
-- Supabase: planned home for server-side secrets (for example an Edge Function replacing the helper). Then regenerate the Cloudinary secret.
-- Delete Cloudinary files when a product is deleted (needs the server).
-- Credits tracking for the AI tool is not visible in this console. Check it in the Claude account settings.
-
-## Suggested next steps
-
-1. Run the helper and confirm the Media library and dashboard usage show real numbers.
-2. Decide Firestore or Realtime Database, then switch the console and migrate the few products.
-3. Add login, admin list and real rules, then remove the open rules and the demo bar.
-4. Build customers, subscriptions and invoices, then the public shop.
-5. Move secrets to Supabase (or Netlify env vars) and regenerate the Cloudinary secret.
+> I am continuing a project from another chat. Read `HANDOFF.md` first, then `BACKEND_PLAN.md` and `FRONTEND_ADMIN.md` in this folder. Do not build the client portal yet (`FRONTEND_CLIENT.md` is on hold). My split of work: Antigravity builds the design and front-end JavaScript from `FRONTEND_ADMIN.md`; you handle the backend, security and plans. Do not create new Markdown files unless I ask; update the existing ones. Keep answers short and simple, and ask me when something is unclear. Today I want to: [write your task here].
