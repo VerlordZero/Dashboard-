@@ -1,7 +1,9 @@
 # Front-end brief: Client portal and public shop
 
+> **ON HOLD. Do not build this now.** The client portal will have a **different design and structure** from the team portal. The owner will provide that design later. The client will see only a few menus (such as Overview) and nothing else. Everything below is an early draft of what data and rules the client side will need. It does not define the look, and the team portal's design (section 4 of `FRONTEND_ADMIN.md`) does **not** apply to it.
+
 Give this file to any AI or developer who will design and build what **customers** see: the **client portal** and the **public shop**.
-Shared rules (tech stack, folder structure, design tokens, `api.js` data layer, entity shapes, security, accessibility, definition of done) are in `FRONTEND_ADMIN.md`. Read its sections 2, 3, 4, 7, 8, 9, 11, 12 and 14 first. This file adds only what is specific to customers.
+Shared rules (tech stack, folder structure, `api.js` data layer, entity shapes, security, accessibility, definition of done) are in `FRONTEND_ADMIN.md`. Read its sections 2, 3, 7, 8, 9, 11, 12 and 14 first. Ignore its design section. This file adds only what is specific to customers.
 Backend and security: `BACKEND_PLAN.md`.
 
 ## 1. Who uses it
@@ -12,18 +14,8 @@ Backend and security: `BACKEND_PLAN.md`.
 | **Public shop** | Anyone | `yourdomain.com/shop` |
 
 - Mobile first. Most customers will open it on a phone. Works well from 360 px up.
-- **No admin code** in this build. Do not import anything from the team portal except the plain shared files in `/common` (tokens, components, format, validate, store, ui, api).
+- **No admin code** in this build. Do not import anything from the team portal except the plain shared files in `/common` (format, validate, store, api).
 - Customers can be Indian or international, an individual or a company, with one business or several. The portal must work for all of them.
-
-## 1b. Look and feel
-
-Same visual language as the team portal: follow **section 4 of `FRONTEND_ADMIN.md`** and the picture `design/reference-dashboard.png` (rounded cards, soft shadows, pill tabs, gradient accents, avatar stacks). Same tokens, same blue gradient default, **light and dark modes** with the theme switch.
-
-Differences for customers:
-- **Desktop:** a rail plus panel like the team portal, with a simpler menu (Overview, Subscriptions, Invoices, Orders, Account).
-- **Phone (most customers):** no side panel. A **bottom tab bar** with the same five items and the brand gradient on the active tab. Cards stack in one column. The business switcher is a chip row at the top.
-- No search command palette needed at first. No "upgrade" or promotional cards.
-- The public shop uses the same tokens with a lighter, more spacious layout and a header instead of a sidebar.
 
 ## 2. Customer types the portal must handle
 
@@ -126,4 +118,4 @@ Same checklist as `FRONTEND_ADMIN.md` section 14, plus:
 
 ## 10. Prompt to give an AI
 
-> Read `FRONTEND_CLIENT.md`, then the shared sections of `FRONTEND_ADMIN.md` and `BACKEND_PLAN.md`. Build the client portal and the public shop as described: plain HTML, CSS and ES modules, no React, mobile first, using only the shared `/common` files and the mock `api.js`. Follow sections 4, 5 and 7 exactly. Ask before adding any API call or changing any data shape.
+> Read `FRONTEND_CLIENT.md`, then the shared sections of `FRONTEND_ADMIN.md` and `BACKEND_PLAN.md`. Build the client portal and the public shop as described: plain HTML, CSS and ES modules, no React, mobile first, using only the shared `/common` files and the mock `api.js`. Follow sections 4, 5 and 7 exactly. Use the design the owner provides. Ask before adding any API call or changing any data shape.

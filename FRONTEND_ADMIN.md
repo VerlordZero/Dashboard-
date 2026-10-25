@@ -1,7 +1,7 @@
 # Front-end brief: Team (admin) portal
 
 Give this file to any AI or developer who will design and build the **team portal** front end.
-It also holds the shared rules (tech, design system, data layer, security) that the client portal follows. The client portal has its own file, `FRONTEND_CLIENT.md`.
+It also holds the shared rules (tech, data layer, security). The design system in section 4 is for the **team portal only**. The client portal is on hold and will have its own design (`FRONTEND_CLIENT.md`).
 The backend and security are built separately (`BACKEND_PLAN.md`). This file defines what the front end must do so both sides fit together.
 
 ## 1. What we are building
