@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Website hosting demo</title>
+<style>
+:root{--bg:#eef1f8;--card:#fff;--fg:#111a2e;--mute:#5e6b85;--line:#e1e6f0;--b1:#3d7bff;--b2:#1b2fa6;--grad:linear-gradient(135deg,var(--b1),var(--b2));--good:#17703a;--bad:#b0231a}
+@media (prefers-color-scheme:dark){:root{--bg:#0a0f1e;--card:#131a2e;--fg:#e8ecf8;--mute:#97a3c2;--line:#26304f;--good:#66d08a;--bad:#ff8f80}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;padding:24px 16px}
+main{max-width:620px;margin:auto;display:flex;flex-direction:column;gap:16px}
+h1{margin:0;font-size:24px}p{margin:0;color:var(--mute)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px}
+#drop{border:2px dashed var(--line);border-radius:16px;padding:36px 16px;text-align:center;cursor:pointer;color:var(--mute)}
+#drop.over{border-color:var(--b1);background:color-mix(in srgb,var(--b1) 10%,transparent)}
+#drop b{display:block;color:var(--fg);font-size:17px}
+button{font:inherit;font-weight:600;min-height:42px;padding:0 18px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+button.primary{background:var(--grad);border:0;color:#fff;width:100%}button:disabled{opacity:.5;cursor:not-allowed}
+ul{margin:12px 0 0;padding:0;list-style:none;color:var(--mute);font-size:13px}
+#out a{color:var(--b1);font-weight:600;overflow-wrap:anywhere}.err{color:var(--bad)}.ok{color:var(--good)}
+</style></head><body><main>
+<div><h1>Website hosting demo</h1><p>Drop a site, get a live address. Demo only.</p></div>
+<div class="card">
+  <label id="drop"><input id="pick" type="file" multiple hidden><b>Drop your files here</b>or click to choose. Needs an <code>index.html</code>. Folders work when dropped.</label>
+  <ul id="list"></ul>
+  <button id="go" class="primary" style="margin-top:14px" disabled>Publish site</button>
+</div>
+<div class="card" id="out" hidden></div>
+<script>
+const $=s=>document.querySelector(s);let files=[];let siteId=null;
+const b64=f=>new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)});
+async function walk(entry,base=''){ if(entry.isFile)return new Promise(r=>entry.file(f=>r([{path:'/'+(base+f.name),file:f}])));
+  const rd=entry.createReader(),all=[];for(;;){const b=await new Promise(r=>rd.readEntries(r));if(!b.length)break;all.push(...b)}
+  return (await Promise.all(all.map(e=>walk(e,base+entry.name+'/')))).flat() }
+function show(){ $('#list').innerHTML=files.map(f=>`<li>${f.path.replace(/</g,'&lt;')} (${(f.file.size/1024).toFixed(1)} KB)</li>`).join(''); $('#go').disabled=!files.length }
+function setFiles(list){ // a single dropped folder: remove the folder name so index.html sits at the top
+  const first=list.map(f=>f.path.split('/')[1]); if(list.length>1&&list.every(f=>f.path.split('/').length>2)&&new Set(first).size===1) list=list.map(f=>({...f,path:'/'+f.path.split('/').slice(2).join('/')}));
+  files=list; show() }
+$('#pick').onchange=e=>setFiles([...e.target.files].map(f=>({path:'/'+f.name,file:f})));
+const d=$('#drop');['dragover','dragenter'].forEach(t=>d.addEventListener(t,e=>{e.preventDefault();d.classList.add('over')}));
+['dragleave','drop'].forEach(t=>d.addEventListener(t,e=>{e.preventDefault();d.classList.remove('over')}));
+d.addEventListener('drop',async e=>{const items=[...e.dataTransfer.items].map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
+  setFiles((await Promise.all(items.map(en=>walk(en)))).flat())});
+async function call(p,body){const r=await fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j}
+$('#go').onclick=async()=>{const o=$('#out');o.hidden=false;o.innerHTML='Publishing…';$('#go').disabled=true;
+  try{const payload=await Promise.all(files.map(async f=>({path:f.path,content:await b64(f.file)})));
+    const r=await call('/api/deploy',{siteId,files:payload});siteId=r.siteId;
+    o.innerHTML=`<p class="ok"><b>Live.</b></p><p><a href="${r.url}" target="_blank" rel="noopener noreferrer">${r.url}</a></p><p style="margin-top:12px"><button id="del">Delete this test site</button></p>`;
+    $('#del').onclick=async()=>{try{await call('/api/delete',{siteId});siteId=null;o.innerHTML='<p class="ok">Site deleted.</p>'}catch(e){o.innerHTML=`<p class="err">${e.message}</p>`}}
+  }catch(e){o.innerHTML=`<p class="err">${e.message.replace(/</g,'&lt;')}</p>`}$('#go').disabled=!files.length};
+</script></main></body></html>
