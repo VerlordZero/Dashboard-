@@ -15,6 +15,16 @@ Backend and security: `BACKEND_PLAN.md`.
 - **No admin code** in this build. Do not import anything from the team portal except the plain shared files in `/common` (tokens, components, format, validate, store, ui, api).
 - Customers can be Indian or international, an individual or a company, with one business or several. The portal must work for all of them.
 
+## 1b. Look and feel
+
+Same visual language as the team portal: follow **section 4 of `FRONTEND_ADMIN.md`** and the picture `design/reference-dashboard.png` (rounded cards, soft shadows, pill tabs, gradient accents, avatar stacks). Same tokens, same blue gradient default, **light and dark modes** with the theme switch.
+
+Differences for customers:
+- **Desktop:** a rail plus panel like the team portal, with a simpler menu (Overview, Subscriptions, Invoices, Orders, Account).
+- **Phone (most customers):** no side panel. A **bottom tab bar** with the same five items and the brand gradient on the active tab. Cards stack in one column. The business switcher is a chip row at the top.
+- No search command palette needed at first. No "upgrade" or promotional cards.
+- The public shop uses the same tokens with a lighter, more spacious layout and a header instead of a sidebar.
+
 ## 2. Customer types the portal must handle
 
 - **Individual, no business**: sees their name and one personal billing profile.

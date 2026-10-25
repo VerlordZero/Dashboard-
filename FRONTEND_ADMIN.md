@@ -53,27 +53,119 @@ The client portal contains **no admin code**. Do not share components that hide 
 
 Rules: one screen per file, each exports `render(container, params)` and an optional `destroy()`. Routing uses `#/path` so the site works on any static host.
 
-## 4. Design system
+## 4. Design system and look and feel
 
-Keep the existing look unless a designer replaces it. It is already coded in `admin/styles.css`.
+**Reference image: `design/reference-dashboard.png`.** Open it and copy its structure, spacing, rounded shapes, soft shadows and feel. Take the layout and style from it, but **not its colours** (see "Colour" below) and **not its "Upgrade to Pro" card, trial text or fake browser window frame**. Those are mock-up decoration and are not built.
 
-- **Style**: corporate and calm. Dark navy sidebar, light grey page, white cards, one blue accent.
-- **Tokens** (change only in `tokens.css`): `--ink` navy `#0e2236`, `--bg` `#f3f5f8`, `--surface` `#fff`, `--line` `#dbe2ea`, `--fg` `#16202b`, `--mute` `#5b6a7a`, `--accent` `#0b5cab`, status colours good `#17703a`, warn `#8a5200`, bad `#b0231a`.
-- **Type**: Public Sans for text, IBM Plex Mono for numbers, prices, dates and ids (tabular figures).
-- **Status pills** always use colour **and** a label: Active (green), Expiring (amber), Payment due (red), Expired (red), Suspended (grey), Draft (grey), Published (green).
-- **Spacing** on a 4 px scale. Cards radius 10 px. Buttons min height 38 px (44 px on touch screens).
-- Dark mode is optional. If added, every colour must come from tokens.
+### 4.1 Layout anatomy (what to copy from the reference)
 
-Required component states: default, hover, focus (visible outline), disabled, loading, error, empty.
+```
++------+------------------+----------------------------------------------+
+| RAIL | PANEL            | TOP BAR: breadcrumb + count pill | theme | bell | avatar |
+| 64px | 260px            +----------------------------------------------+
+|      | title + collapse | PAGE CONTENT on a soft canvas                |
+| logo | search  Ctrl+K   |  cards, pill tabs, tables, avatar stacks     |
+| icon | tree menu        |                                              |
+| icon |  group > items   |  floating bulk-action bar at the bottom      |
+| icon | pinned section   |  when table rows are selected                |
+| icon | attention card   |                                              |
+| icon |                  |                                              |
+| ---  |                  |                                              |
+| gear |                  |                                              |
+| exit |                  |                                              |
++------+------------------+----------------------------------------------+
+```
+
+- **Rail (far left, about 64 px):** logo at the top, then **5 icon buttons**, then a divider, then Settings and Sign out at the bottom. The active icon sits in a rounded square with the brand colour. Tooltip on hover. Each rail icon selects a **workspace**, and the panel next to it shows that workspace's menu.
+- **Panel (about 260 px):** a rounded, floating dark panel with 12 px outer margin and 20 px radius. Header shows the workspace name with a round collapse button. Below: a **search field with a `Ctrl+K` hint** that opens a command palette (search clients, companies, products, invoices; jump to a page). Then the **tree menu**: a highlighted group row (brand gradient pill, white text, chevron) with indented children joined by a thin vertical guide line; each child can show a **count badge** (for example "242"). A **Pinned** section (reference: "Starred Files") lists items the user pinned, with an edit icon. A dashed **"+ New ..."** button sits under it (for example "New client"). At the bottom of the panel is a **small attention card** that replaces the reference's upgrade card: counts of payments to verify and subscriptions expiring, with a button that opens them.
+- **Collapsing:** the panel can collapse so only the rail shows. Remember the choice.
+- **Top bar:** breadcrumb (Dashboard / Overview / Recent activity) with a small count pill, then on the right the **light and dark switch**, notifications bell and the user avatar menu.
+- **Content:** large rounded cards (16 to 20 px radius), soft shadows, generous spacing. Section titles in semi-bold. Pill-style tabs ("Recently opened", "Shared documents"). Tables with a **checkbox column**, avatar stacks with a "+N" overflow, small status pills. When rows are selected, a **floating dark action bar** appears at the bottom of the content with the selected item and bulk actions.
+- **Cards that look like the reference's folder cards:** client cards and product cards with a coloured top tab, a name, a small meta line (for example "2 companies, 4 subscriptions") and an avatar stack of contacts.
+
+### 4.2 Workspaces for the 5 rail icons
+
+| Rail icon | Workspace | Panel menu (tree) |
+|---|---|---|
+| 1 Grid | **Dashboard** | Overview (My overview, Recent activity), Needs attention, Reports (later) |
+| 2 People | **Clients** | All clients, Add client, (later: Companies) |
+| 3 Box | **Catalog** | Products, Plans and pricing, Services price list, Media library |
+| 4 Receipt | **Billing** | Subscriptions, Invoices, Payments (to verify), Reminders |
+| 5 Brush | **Orders** | Creative orders (Brief, In progress, Review, Delivered) |
+| Gear (bottom) | **Settings** | Branding, Company and tax, Team and roles, Integrations |
+| Exit (bottom) | Sign out | |
+
+This replaces the earlier "top menu" idea. Clients stays first after the Dashboard. The owner can reorder or rename workspaces later without changing the layout.
+
+### 4.3 Colour
+
+**Default theme: Blue.** A medium blue to deep blue gradient is the brand colour. It is the logo colour, so it must be easy to change in **one place** (`tokens.css`). The reference image is violet; keep a **Violet preset** as an alternative, but Blue is the default.
+
+```css
+/* tokens.css  Brand (one place to change) */
+:root {
+  --brand-1: #3D7BFF;   /* medium blue */
+  --brand-2: #1B2FA6;   /* deep blue   */
+  --brand-grad: linear-gradient(135deg, var(--brand-1), var(--brand-2));
+  --brand-soft: color-mix(in srgb, var(--brand-1) 14%, transparent);  /* tints, selected rows, focus rings */
+}
+:root[data-brand="violet"] { --brand-1: #8B5CF6; --brand-2: #4C1D95; }  /* reference look */
+```
+
+Use `--brand-grad` for: the active rail icon, the active menu group pill, primary buttons, progress bars, the selected-count bar accent and the logo tile. Use `--brand-soft` for hover and selected backgrounds. **Never hard-code a colour outside `tokens.css`.**
+
+Status colours are separate from the brand and keep their meaning in both themes: good (green), warning (amber), danger (red), neutral (grey).
+
+### 4.4 Two modes: light and dark (both designed, not just inverted)
+
+- A switch in the top bar: **Light, Dark, System**. Default is System. Store the choice in the browser (`localStorage`, wrapped in try/catch) and apply it before first paint to avoid a flash. Use `data-theme="light|dark"` on the root element.
+- Every colour comes from a token that has a light value and a dark value. Check contrast (at least 4.5 : 1 for text) in both.
+
+| Token | Light | Dark |
+|---|---|---|
+| `--canvas` (page background) | `#EEF1F8` | `#0A0F1E` |
+| `--surface` (cards) | `#FFFFFF` | `#131A2E` |
+| `--surface-2` (inputs, table header) | `#F4F6FB` | `#1A2340` |
+| `--line` | `#E1E6F0` | `#26304F` |
+| `--text` | `#111A2E` | `#E8ECF8` |
+| `--text-mute` | `#5E6B85` | `#97A3C2` |
+| `--side-bg` (rail and panel) | deep navy gradient `#0F1A3D to #0A1230` | `#0D1330 to #080C1F` |
+| `--side-text` | `#E6EBFA` | `#E6EBFA` |
+| `--side-mute` | `#93A0C8` | `#7F8CB5` |
+| Shadow | soft blue-grey, low opacity | black at low opacity, plus 1 px inner border |
+
+In light mode the rail and panel stay dark (as in the reference) so the brand stands out. A fully light sidebar can be offered later as a setting.
+
+### 4.5 Type, shape and motion
+
+- **Font:** Plus Jakarta Sans (or Inter if unavailable) for the UI. Use tabular figures for prices, counts and dates (`font-variant-numeric: tabular-nums`). Sizes: 12, 13, 14 (body), 16, 20, 24, 30.
+- **Icons:** one line-icon set only (Lucide or Phosphor), 1.5 px stroke, 20 px in menus, 16 px in tables. No emoji as icons.
+- **Radius:** controls 10 px, cards 16 to 20 px, panels 20 px, pills fully round. **Spacing** on a 4 px scale.
+- **Motion:** 150 to 200 ms ease for hover, menu expand and panel collapse. No bouncing. Turn it off under `prefers-reduced-motion`.
+- **Focus:** a visible 2 px ring in `--brand-1`.
+
+### 4.6 Component list (build once, reuse everywhere)
+
+Rail icon button, workspace panel, tree menu item (group, child, count badge, pinned), search field and command palette, breadcrumb with count pill, card, stat card, pill tabs, button (primary gradient, secondary, ghost, danger), input, select, switch, checkbox, table with selectable rows, avatar and avatar stack, status pill, floating bulk-action bar, modal, drawer, toast, skeleton, empty state, progress bar, file or media tile, stepper (for the Add client flow), theme switch.
+
+Required states for every component: default, hover, focus, active, disabled, loading, error, empty.
+
+### 4.7 Responsive
+
+- 1280 px and wider: rail + panel + content.
+- 1024 to 1279 px: panel collapsed to the rail by default, opens as an overlay on click.
+- Below 1024 px: the rail and panel become a slide-in drawer from a menu button. Tables scroll sideways inside their card. The bulk-action bar sticks to the bottom.
+- No horizontal page scroll at any width.
+
+### 4.8 Logo
+
+The logo sits in a rounded square at the top of the rail, and next to the company name in the panel header. It is uploaded under Settings, Branding. If none is uploaded, show the first letter of the company name on the brand gradient. (Please provide the logo file and its exact colours.)
 
 ## 5. Screens (team portal)
 
 ### Navigation
 
-- **Dashboard** is its own page, the first item. One short overview of everything with a link into each area (details below).
-- A **top menu** follows. **Clients is the first item.** The rest (products, subscriptions, services and orders, invoices, payments, media, settings) will be ordered when the owner decides.
-- **Clients sub menu:** `All clients` and `Add client`. No separate menu for companies: companies live inside clients. (Optional later: a `Companies` list that searches every company by name or GSTIN across all clients.)
-- Same menu on phones as a slide-in drawer.
+Navigation is the **rail and panel** described in section 4.1 and 4.2. **Dashboard** is the first workspace (its own page, a short overview). **Clients** is the second, with the sub menu `All clients` and `Add client`. Companies live inside clients (an optional `Companies` list can be added later). On small screens the same menu opens as a drawer.
 
 ### Dashboard (short on purpose)
 
