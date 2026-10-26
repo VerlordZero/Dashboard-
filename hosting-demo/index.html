@@ -7,13 +7,13 @@
 <style>
 :root{--bg:#eef1f8;--card:#fff;--soft:#f4f6fb;--fg:#111a2e;--mute:#5e6b85;--line:#e1e6f0;--b1:#3d7bff;--b2:#1b2fa6;--grad:linear-gradient(135deg,var(--b1),var(--b2));--good:#17703a;--goodbg:#dff3e5;--warn:#8a5200;--warnbg:#fbeccb;--bad:#b0231a;--badbg:#fbe1dd}
 @media (prefers-color-scheme:dark){:root{--bg:#0a0f1e;--card:#131a2e;--soft:#1a2340;--fg:#e8ecf8;--mute:#97a3c2;--line:#26304f;--good:#66d08a;--goodbg:#163220;--warn:#f0b34a;--warnbg:#3a2b0c;--bad:#ff8f80;--badbg:#3e1b17}}
-*{box-sizing:border-box}
+*{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px 16px}
 main{max-width:720px;margin:auto;display:flex;flex-direction:column;gap:16px}
 h1{margin:0;font-size:24px}h2{margin:0;font-size:16px}p{margin:0;color:var(--mute)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:14px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-input[type=password],select{flex:1;min-width:200px;min-height:42px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--soft);color:var(--fg);font:inherit}
+input[type=password],input[type=text],select{flex:1;min-width:200px;min-height:42px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--soft);color:var(--fg);font:inherit}
 button{font:inherit;font-weight:600;min-height:40px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
 button.primary{background:var(--grad);border:0;color:#fff}
 button.danger{color:var(--bad)}button:disabled{opacity:.5;cursor:not-allowed}
@@ -32,6 +32,9 @@ ul.files{margin:0;padding:0;list-style:none;color:var(--mute);font-size:13px}
 a{color:var(--b1);font-weight:600;overflow-wrap:anywhere}
 .pill{display:inline-block;padding:1px 10px;border-radius:99px;font-size:12px;font-weight:600}
 .p-good{background:var(--goodbg);color:var(--good)}.p-warn{background:var(--warnbg);color:var(--warn)}.p-bad{background:var(--badbg);color:var(--bad)}
+textarea{width:100%;min-height:320px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--soft);color:var(--fg);font:13px/1.5 ui-monospace,Consolas,monospace;resize:vertical}
+.acts{display:flex;gap:8px;flex-wrap:wrap}.acts button{min-height:34px;padding:0 12px;font-size:13px}
+.vers{width:100%;background:var(--soft);border-radius:12px;padding:6px 12px;font-size:13px}.vers .v{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)}.vers .v:first-child{border-top:0}
 .msg{padding:12px 14px;border-radius:12px;font-size:14px}.msg.err{background:var(--badbg);color:var(--bad)}.msg.ok{background:var(--goodbg);color:var(--good)}.msg.info{background:var(--soft);color:var(--mute)}
 @media (max-width:520px){.stats{grid-template-columns:1fr}}
 </style>
@@ -45,12 +48,13 @@ a{color:var(--b1);font-weight:600;overflow-wrap:anywhere}
 
   <section class="card" id="connect">
     <h2>1. Connect to Netlify</h2>
-    <p>Paste a Netlify personal access token. It stays in this page's memory only. It is not saved, and closing or refreshing the page forgets it.</p>
+    <p>Paste your Netlify personal access token once. By default it is remembered in this browser on this computer, so you do not need to enter it again. Click Disconnect to forget it.</p>
     <div class="row">
       <input id="token" type="password" autocomplete="off" placeholder="Netlify token" aria-label="Netlify token">
       <button id="connectBtn" class="primary">Connect</button>
       <button id="disconnectBtn" hidden>Disconnect</button>
     </div>
+    <label class="row" id="rememberRow" style="gap:8px;font-size:14px"><input type="checkbox" id="remember" checked> Remember on this computer</label>
     <div id="connectMsg"></div>
   </section>
 
@@ -64,6 +68,8 @@ a{color:var(--b1);font-weight:600;overflow-wrap:anywhere}
     <div id="sites"></div>
     <p id="capNote" hidden>Counts stop at 500 deployments per site and 20 sites in this demo.</p>
   </section>
+
+  <section class="card" id="editor" hidden></section>
 
   <section class="card" id="publish" hidden>
     <h2>3. Publish a site</h2>
@@ -116,10 +122,18 @@ a{color:var(--b1);font-weight:600;overflow-wrap:anywhere}
     return { n, last };
   }
 
+  /* ---------- small helpers ---------- */
+  const store = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }, del: k => { try { localStorage.removeItem(k); } catch (e) {} } };
+  const TEXT = ['.html', '.css', '.js', '.json', '.txt', '.svg', '.xml'];
+  const ext = p => (p.match(/\.[^.\/]+$/) || [''])[0].toLowerCase();
+  const isText = p => TEXT.includes(ext(p));
+  const ui = { rename: null, versions: null, editor: null };
+
   /* ---------- screens ---------- */
   const ago = d => { if (!d) return 'never'; const m = Math.round((Date.now() - new Date(d)) / 60000);
     return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago'; };
   const stateTag = s => !s ? '' : s === 'ready' ? '<span class="pill p-good">Live</span>' : s === 'error' ? '<span class="pill p-bad">Failed</span>' : `<span class="pill p-warn">${esc(s)}</span>`;
+  const siteUrl = s => s.ssl_url || s.url || '';
 
   async function refresh() {
     $('#sites').innerHTML = '<div class="msg info">Loading your sites…</div>';
@@ -129,42 +143,142 @@ a{color:var(--b1);font-weight:600;overflow-wrap:anywhere}
       for (let i = 0; i < sites.length; i += 5)                      // 5 at a time
         counts.push(...await Promise.all(sites.slice(i, i + 5).map(s => countDeploys(s.id).catch(() => ({ n: 0, last: null })))));
       sites.forEach((s, i) => { s._n = counts[i].n; s._last = counts[i].last; });
-      const total = sites.reduce((a, s) => a + s._n, 0);
-      $('#nSites').textContent = sites.length; $('#nDeploys').textContent = total;
-      $('#nLive').textContent = sites.filter(s => s._last && s._last.state === 'ready').length;
-      $('#capNote').hidden = !(sites.length >= MAX_SITES || sites.some(s => s._n >= MAX_DEPLOYS));
-      $('#sites').innerHTML = sites.length ? sites.map(s => {
-        const url = s.ssl_url || s.url || '';
-        return `<div class="site"><div class="meta"><b>${esc(s.name)}</b>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>` : ''}
-          <small>${s._n}${s._n >= MAX_DEPLOYS ? '+' : ''} deployment${s._n === 1 ? '' : 's'} · last ${ago(s._last && s._last.created_at)} ${stateTag(s._last && s._last.state)}</small></div>
-          <div class="row">${pendingDelete === s.id
-            ? `<button class="danger" data-del="${esc(s.id)}">Really delete?</button><button data-cancel>Cancel</button>`
-            : `<button class="danger" data-ask="${esc(s.id)}">Delete</button>`}</div></div>`; }).join('')
-        : '<div class="msg info">No sites yet. Publish one below.</div>';
-      $('#target').innerHTML = '<option value="">Create a new site</option>' + sites.map(s => `<option value="${esc(s.id)}">Update: ${esc(s.name)}</option>`).join('');
+      drawSites();
     } catch (e) { $('#sites').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
   }
+  function drawSites() {
+    const total = sites.reduce((a, s) => a + s._n, 0);
+    $('#nSites').textContent = sites.length; $('#nDeploys').textContent = total;
+    $('#nLive').textContent = sites.filter(s => s._last && s._last.state === 'ready').length;
+    $('#capNote').hidden = !(sites.length >= MAX_SITES || sites.some(s => s._n >= MAX_DEPLOYS));
+    const target = $('#target').value;
+    $('#target').innerHTML = '<option value="">Create a new site</option>' + sites.map(s => `<option value="${esc(s.id)}">Replace files of: ${esc(s.name)}</option>`).join('');
+    $('#target').value = sites.some(s => s.id === target) ? target : '';
+    $('#sites').innerHTML = sites.length ? sites.map(siteRow).join('') : '<div class="msg info">No sites yet. Publish one below.</div>';
+  }
+  function siteRow(s) {
+    const url = siteUrl(s), id = esc(s.id);
+    const nameBlock = ui.rename === s.id
+      ? `<div class="row"><input type="text" id="newName" value="${esc(s.name)}" aria-label="New site name" style="min-width:160px"><button class="primary" data-act="renameSave" data-id="${id}">Save</button><button data-act="renameCancel">Cancel</button></div><small>The name is the address (name.netlify.app). The old address stops working.</small>`
+      : `<b>${esc(s.name)}</b>`;
+    const vers = ui.versions === s.id ? `<div class="vers">${(s._deploys || []).map(d => {
+        const cur = d.id === s._current;
+        return `<div class="v"><span>${ago(d.created_at)} ${stateTag(d.state)} ${cur ? '<span class="pill p-good">Current</span>' : ''}</span>${cur || d.state !== 'ready' ? '' : `<button data-act="restore" data-id="${id}" data-dep="${esc(d.id)}">Publish this version</button>`}</div>`; }).join('') || 'No versions.'}</div>` : '';
+    return `<div class="site"><div class="meta">${nameBlock}${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>` : ''}
+      <small>${s._n}${s._n >= MAX_DEPLOYS ? '+' : ''} deployment${s._n === 1 ? '' : 's'} · last ${ago(s._last && s._last.created_at)} ${stateTag(s._last && s._last.state)}</small></div>
+      <div class="acts">
+        <button data-act="rename" data-id="${id}">Rename</button>
+        <button data-act="edit" data-id="${id}">Edit files</button>
+        <button data-act="replace" data-id="${id}">Upload new files</button>
+        <button data-act="versions" data-id="${id}">Versions</button>
+        ${pendingDelete === s.id ? `<button class="danger" data-act="del" data-id="${id}">Really delete?</button><button data-act="cancel">Cancel</button>` : `<button class="danger" data-act="ask" data-id="${id}">Delete</button>`}
+      </div>${vers}</div>`;
+  }
 
-  /* ---------- connect ---------- */
-  $('#connectBtn').onclick = async () => {
-    const t = $('#token').value.trim(); if (!t) { $('#connectMsg').innerHTML = '<div class="msg err">Paste your token first.</div>'; return; }
+  /* ---------- connect (token remembered in this browser if allowed) ---------- */
+  async function connect(t, fromSaved) {
     token = t; $('#connectMsg').innerHTML = '<div class="msg info">Connecting…</div>';
     try {
       const me = await nl('/user');
-      $('#connectMsg').innerHTML = `<div class="msg ok">Connected as ${esc(me.email || me.full_name || 'your account')}.</div>`;
-      $('#token').value = ''; $('#token').hidden = true; $('#connectBtn').hidden = true; $('#disconnectBtn').hidden = false;
+      if ($('#remember').checked) store.set('netlifyToken', t); else store.del('netlifyToken');
+      $('#connectMsg').innerHTML = `<div class="msg ok">Connected as ${esc(me.email || me.full_name || 'your account')}.${$('#remember').checked ? ' Remembered on this computer.' : ''}</div>`;
+      $('#token').value = ''; $('#token').hidden = true; $('#connectBtn').hidden = true; $('#rememberRow').hidden = true; $('#disconnectBtn').hidden = false;
       $('#overview').hidden = false; $('#publish').hidden = false; refresh();
-    } catch (e) { token = ''; $('#connectMsg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
-  };
+    } catch (e) {
+      token = ''; if (fromSaved) store.del('netlifyToken');
+      $('#connectMsg').innerHTML = `<div class="msg err">${esc(fromSaved ? 'The saved token no longer works. Paste a new one.' : e.message)}</div>`;
+    }
+  }
+  $('#connectBtn').onclick = () => { const t = $('#token').value.trim(); if (!t) { $('#connectMsg').innerHTML = '<div class="msg err">Paste your token first.</div>'; return; } connect(t, false); };
   $('#token').addEventListener('keydown', e => { if (e.key === 'Enter') $('#connectBtn').click(); });
-  $('#disconnectBtn').onclick = () => { token = ''; sites = []; location.reload(); };
+  $('#disconnectBtn').onclick = () => { store.del('netlifyToken'); token = ''; location.reload(); };
   $('#refreshBtn').onclick = refresh;
+  { const saved = store.get('netlifyToken'); if (saved) connect(saved, true); }
+
+  /* ---------- site actions: rename, versions, delete, edit, replace ---------- */
+  const find = id => sites.find(s => s.id === id);
   $('#sites').addEventListener('click', async e => {
-    const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.ask) { pendingDelete = b.dataset.ask; refresh(); }
-    else if (b.dataset.cancel !== undefined) { pendingDelete = null; refresh(); }
-    else if (b.dataset.del) { try { await nl('/sites/' + b.dataset.del, { method: 'DELETE' }); pendingDelete = null; $('#out').innerHTML = '<div class="msg ok">Site deleted.</div>'; } catch (er) { $('#out').innerHTML = `<div class="msg err">${esc(er.message)}</div>`; } refresh(); }
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    const act = b.dataset.act, id = b.dataset.id, s = id && find(id), out = $('#out');
+    try {
+      if (act === 'ask') { pendingDelete = id; drawSites(); }
+      else if (act === 'cancel') { pendingDelete = null; drawSites(); }
+      else if (act === 'del') { await nl('/sites/' + id, { method: 'DELETE' }); store.del('site:' + id); pendingDelete = null; out.innerHTML = '<div class="msg ok">Site deleted.</div>'; refresh(); }
+      else if (act === 'rename') { ui.rename = id; drawSites(); const f = $('#newName'); f.focus(); f.select(); }
+      else if (act === 'renameCancel') { ui.rename = null; drawSites(); }
+      else if (act === 'renameSave') {
+        const name = $('#newName').value.trim().toLowerCase();
+        if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(name)) throw new Error('Use 3 to 63 characters: lowercase letters, numbers and hyphens, not starting or ending with a hyphen.');
+        await nl('/sites/' + id, { method: 'PATCH', ...jsonBody({ name }) }); ui.rename = null; out.innerHTML = `<div class="msg ok">Renamed to ${esc(name)}.</div>`; refresh();
+      }
+      else if (act === 'versions') {
+        if (ui.versions === id) { ui.versions = null; return drawSites(); }
+        const d = await nl(`/sites/${id}/deploys?per_page=10`); s._deploys = d;
+        s._current = (s.published_deploy && s.published_deploy.id) || (d.filter(x => x.published_at).sort((a, c) => new Date(c.published_at) - new Date(a.published_at))[0] || {}).id;
+        ui.versions = id; drawSites();
+      }
+      else if (act === 'restore') { await nl(`/deploys/${b.dataset.dep}/restore`, { method: 'POST' }); ui.versions = null; out.innerHTML = '<div class="msg ok">That version is live again.</div>'; refresh(); }
+      else if (act === 'replace') { $('#target').value = id; $('#publish').scrollIntoView({ behavior: 'smooth' }); out.innerHTML = `<div class="msg info">Choose the new files for <b>${esc(s.name)}</b>. Publishing replaces everything on that site.</div>`; }
+      else if (act === 'edit') await openEditor(id);
+    } catch (er) { out.innerHTML = `<div class="msg err">${esc(er.message)}</div>`; }
   });
+
+  /* ---------- in-page editor for text files (index.html, css, js ...) ---------- */
+  let ed = null;
+  async function openEditor(id) {
+    const s = find(id), box = $('#editor'); box.hidden = false; box.innerHTML = '<div class="msg info">Opening the files…</div>'; box.scrollIntoView({ behavior: 'smooth' });
+    const meta = await nl(`/sites/${id}/files`), byPath = Object.fromEntries(meta.map(f => [f.path || f.id, f.sha]));
+    let texts = null; try { texts = JSON.parse(store.get('site:' + id) || 'null'); } catch (e) {}
+    if (texts) for (const [p, t] of Object.entries(texts)) if (byPath[p] && byPath[p] !== await sha1(new TextEncoder().encode(t).buffer)) { texts = null; break; }   // site changed elsewhere
+    if (!texts) {                                                          // try to read the live site
+      texts = {};
+      try { for (const p of Object.keys(byPath).filter(isText).slice(0, 30)) { const r = await fetch(siteUrl(s) + p); if (!r.ok) throw 0; texts[p] = await r.text(); } }
+      catch (e) { texts = null; }
+    }
+    if (!texts || !Object.keys(texts).length) { box.innerHTML = `<div class="row" style="justify-content:space-between"><h2>Edit: ${esc(s.name)}</h2><button data-ed="close">Close</button></div><div class="msg err">This page cannot read the files of this site (it was not published from here, or it changed since). Use "Upload new files" to replace it.</div>`; return; }
+    ed = { id, s, byPath, texts, edits: {}, current: texts['/index.html'] !== undefined ? '/index.html' : Object.keys(texts)[0] };
+    drawEditor();
+  }
+  function drawEditor() {
+    const { s, texts, edits, current } = ed;
+    $('#editor').innerHTML = `<div class="row" style="justify-content:space-between"><h2>Edit: ${esc(s.name)}</h2><button data-ed="close">Close</button></div>
+      <div class="row"><select id="edFile" aria-label="File to edit">${Object.keys(texts).map(p => `<option value="${esc(p)}" ${p === current ? 'selected' : ''}>${esc(p)}${edits[p] !== undefined ? ' (changed)' : ''}</option>`).join('')}</select>
+      <button class="primary" data-ed="save">Save and publish</button></div>
+      <textarea id="edText" spellcheck="false" aria-label="File content"></textarea><div id="edOut"></div>`;
+    $('#edText').value = edits[current] !== undefined ? edits[current] : texts[current];
+  }
+  $('#editor').addEventListener('input', e => { if (e.target.id === 'edText') ed.edits[ed.current] = e.target.value; });
+  $('#editor').addEventListener('change', e => { if (e.target.id === 'edFile') { ed.current = e.target.value; drawEditor(); } });
+  $('#editor').addEventListener('click', async e => {
+    const b = e.target.closest('button[data-ed]'); if (!b) return;
+    if (b.dataset.ed === 'close') { $('#editor').hidden = true; ed = null; return; }
+    const out = $('#edOut'), changed = Object.entries(ed.edits).filter(([p, t]) => t !== ed.texts[p]);
+    if (!changed.length) { out.innerHTML = '<div class="msg info">Nothing changed.</div>'; return; }
+    try {
+      out.innerHTML = '<div class="msg info">Publishing…</div>';
+      const digest = { ...ed.byPath }, bufs = {};
+      for (const [p, t] of changed) { const bf = new TextEncoder().encode(t).buffer; bufs[p] = bf; digest[p] = await sha1(bf); }
+      const url = await deploySite(ed.id, digest, bufs);
+      changed.forEach(([p, t]) => { ed.texts[p] = t; });
+      store.set('site:' + ed.id, JSON.stringify(ed.texts)); ed.edits = {};
+      out.innerHTML = `<div class="msg ok"><b>Live.</b> <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></div>`; refresh();
+    } catch (er) { out.innerHTML = `<div class="msg err">${esc(er.message)}</div>`; }
+  });
+
+  /* ---------- one deploy routine used by publish and edit ---------- */
+  async function deploySite(siteId, digest, bufs) {
+    const d = await nl(`/sites/${siteId}/deploys`, { method: 'POST', ...jsonBody({ files: digest }) });
+    const need = new Set(d.required || []);
+    for (const [p, b] of Object.entries(bufs))
+      if (need.has(digest[p])) await nl(`/deploys/${d.id}/files${p.split('/').map(encodeURIComponent).join('/')}`, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body: b });
+    for (let i = 0; i < 40; i++) {
+      const st = await nl('/deploys/' + d.id);
+      if (st.state === 'ready') { const site = await nl('/sites/' + siteId); return site.ssl_url || site.url; }
+      if (st.state === 'error') throw new Error('Netlify could not publish this deploy: ' + (st.error_message || 'unknown error'));
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    throw new Error('Netlify is taking too long. Check the site in your Netlify dashboard.');
+  }
 
   /* ---------- choose files ---------- */
   async function walk(entry, base = '') {
@@ -207,21 +321,13 @@ a{color:var(--b1);font-weight:600;overflow-wrap:anywhere}
       check(); go.disabled = true; out.innerHTML = '<div class="msg info">Publishing…</div>';
       let siteId = $('#target').value;
       if (!siteId) siteId = (await nl('/sites', { method: 'POST', ...jsonBody({ name: 'demo-' + [...crypto.getRandomValues(new Uint8Array(4))].map(b => b.toString(16).padStart(2, '0')).join('') }) })).id;
-      const digest = {}, bufs = {};
-      for (const f of files) { const b = await f.file.arrayBuffer(); bufs[f.path] = b; digest[f.path] = await sha1(b); }
-      const d = await nl(`/sites/${siteId}/deploys`, { method: 'POST', ...jsonBody({ files: digest }) });
-      const need = new Set(d.required || []);
-      for (const [p, b] of Object.entries(bufs))
-        if (need.has(digest[p])) await nl(`/deploys/${d.id}/files${p.split('/').map(encodeURIComponent).join('/')}`, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body: b });
-      let live = false;
-      for (let i = 0; i < 40 && !live; i++) {
-        const s = await nl('/deploys/' + d.id);
-        if (s.state === 'ready') live = true;
-        else if (s.state === 'error') throw new Error('Netlify could not publish this deploy: ' + (s.error_message || 'unknown error'));
-        else await new Promise(r => setTimeout(r, 1500));
+      const digest = {}, bufs = {}, copy = {}; let copyBytes = 0;
+      for (const f of files) {
+        const buf = await f.file.arrayBuffer(); bufs[f.path] = buf; digest[f.path] = await sha1(buf);
+        if (isText(f.path) && buf.byteLength < 300000 && (copyBytes += buf.byteLength) < 1500000) copy[f.path] = new TextDecoder().decode(buf);
       }
-      if (!live) throw new Error('Netlify is taking too long. Check the site in your Netlify dashboard.');
-      const site = await nl('/sites/' + siteId), url = site.ssl_url || site.url;
+      const url = await deploySite(siteId, digest, bufs);
+      store.set('site:' + siteId, JSON.stringify(copy));                    // lets you edit these files later from this page
       out.innerHTML = `<div class="msg ok"><b>Live.</b> <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></div>`;
       refresh();
     } catch (e) { out.innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
