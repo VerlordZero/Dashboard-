@@ -1,11 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Company Control Room</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <script>
-tailwind.config = { theme: { extend: {
+if (window.tailwind) tailwind.config = { theme: { extend: {
   colors: { bg:'var(--bg)', surface:'var(--surface)', raise:'var(--raise)', fg:'var(--fg)', mute:'var(--mute)', line:'var(--line)', accent:'var(--accent)', soft:'var(--soft)' },
   fontFamily: { display:['Bricolage Grotesque','Instrument Sans','system-ui','sans-serif'], sans:['Instrument Sans','system-ui','sans-serif'], mono:['IBM Plex Mono','ui-monospace','monospace'] }
 } } };
@@ -68,8 +72,12 @@ nav.tabs .in{max-width:640px;margin-inline:auto;display:grid;grid-template-colum
 .stripe-warn{box-shadow:inset 3px 0 0 var(--warn)} .stripe-bad{box-shadow:inset 3px 0 0 var(--bad)}
 .col-bar{width:100%;border-radius:4px 4px 0 0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* standalone page basics */
+[hidden]{display:none!important}
+body{margin:0}
 </style>
-
+</head>
+<body>
 <header class="top"><div class="col flex items-center justify-between gap-3">
   <div class="min-w-0">
     <div class="label">Demo data</div>
@@ -324,7 +332,7 @@ const TITLES={home:'Control Room',subs:'Customers',products:'Products',services:
 function render(top){
   $('#app').innerHTML=VIEWS[S.view]();
   $('#ttl').textContent=TITLES[S.view];
-  $('#tabs').innerHTML=TABS.map(t=>`<button class="tab" data-a="nav" data-v="${t[0]}" ${t[0]===S.view?'aria-current="page"':''}><svg viewBox="0 0 24 24" aria-hidden="true">${t[2]}</svg>${t[1]}</button>`).join('');
+  $('#tabs').innerHTML=TABS.map(t=>`<button class="tab" data-a="nav" data-v="${t[0]}" ${t[0]===S.view?'aria-current="page"':''}><svg viewBox="0 0 24 24" aria-hidden="true">${t[2]}<\/svg>${t[1]}</button>`).join('');
   if(top) window.scrollTo(0,0);
 }
 function nav(v,id){
@@ -374,3 +382,5 @@ const h=location.hash.slice(1); if(VIEWS[h]) S.view=h;
 render();
 })();
 </script>
+</body>
+</html>
