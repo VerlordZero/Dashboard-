@@ -1,48 +1,233 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Website hosting demo</title>
 <style>
-:root{--bg:#eef1f8;--card:#fff;--fg:#111a2e;--mute:#5e6b85;--line:#e1e6f0;--b1:#3d7bff;--b2:#1b2fa6;--grad:linear-gradient(135deg,var(--b1),var(--b2));--good:#17703a;--bad:#b0231a}
-@media (prefers-color-scheme:dark){:root{--bg:#0a0f1e;--card:#131a2e;--fg:#e8ecf8;--mute:#97a3c2;--line:#26304f;--good:#66d08a;--bad:#ff8f80}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;padding:24px 16px}
-main{max-width:620px;margin:auto;display:flex;flex-direction:column;gap:16px}
-h1{margin:0;font-size:24px}p{margin:0;color:var(--mute)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px}
-#drop{border:2px dashed var(--line);border-radius:16px;padding:36px 16px;text-align:center;cursor:pointer;color:var(--mute)}
+:root{--bg:#eef1f8;--card:#fff;--soft:#f4f6fb;--fg:#111a2e;--mute:#5e6b85;--line:#e1e6f0;--b1:#3d7bff;--b2:#1b2fa6;--grad:linear-gradient(135deg,var(--b1),var(--b2));--good:#17703a;--goodbg:#dff3e5;--warn:#8a5200;--warnbg:#fbeccb;--bad:#b0231a;--badbg:#fbe1dd}
+@media (prefers-color-scheme:dark){:root{--bg:#0a0f1e;--card:#131a2e;--soft:#1a2340;--fg:#e8ecf8;--mute:#97a3c2;--line:#26304f;--good:#66d08a;--goodbg:#163220;--warn:#f0b34a;--warnbg:#3a2b0c;--bad:#ff8f80;--badbg:#3e1b17}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px 16px}
+main{max-width:720px;margin:auto;display:flex;flex-direction:column;gap:16px}
+h1{margin:0;font-size:24px}h2{margin:0;font-size:16px}p{margin:0;color:var(--mute)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input[type=password],select{flex:1;min-width:200px;min-height:42px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--soft);color:var(--fg);font:inherit}
+button{font:inherit;font-weight:600;min-height:40px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+button.primary{background:var(--grad);border:0;color:#fff}
+button.danger{color:var(--bad)}button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--b1);outline-offset:2px}
+#drop{border:2px dashed var(--line);border-radius:16px;padding:32px 16px;text-align:center;cursor:pointer;color:var(--mute);display:block}
 #drop.over{border-color:var(--b1);background:color-mix(in srgb,var(--b1) 10%,transparent)}
 #drop b{display:block;color:var(--fg);font-size:17px}
-button{font:inherit;font-weight:600;min-height:42px;padding:0 18px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
-button.primary{background:var(--grad);border:0;color:#fff;width:100%}button:disabled{opacity:.5;cursor:not-allowed}
-ul{margin:12px 0 0;padding:0;list-style:none;color:var(--mute);font-size:13px}
-#out a{color:var(--b1);font-weight:600;overflow-wrap:anywhere}.err{color:var(--bad)}.ok{color:var(--good)}
-</style></head><body><main>
-<div><h1>Website hosting demo</h1><p>Drop a site, get a live address. Demo only.</p></div>
-<div class="card">
-  <label id="drop"><input id="pick" type="file" multiple hidden><b>Drop your files here</b>or click to choose. Needs an <code>index.html</code>. Folders work when dropped.</label>
-  <ul id="list"></ul>
-  <button id="go" class="primary" style="margin-top:14px" disabled>Publish site</button>
-</div>
-<div class="card" id="out" hidden></div>
+ul.files{margin:0;padding:0;list-style:none;color:var(--mute);font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:var(--soft);border-radius:14px;padding:12px 14px}
+.stat span{display:block;font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+.stat b{font-size:26px;font-variant-numeric:tabular-nums}
+.site{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--line)}
+.site:first-of-type{border-top:0}
+.site .meta{min-width:0}.site b{display:block;overflow-wrap:anywhere}.site small{color:var(--mute)}
+a{color:var(--b1);font-weight:600;overflow-wrap:anywhere}
+.pill{display:inline-block;padding:1px 10px;border-radius:99px;font-size:12px;font-weight:600}
+.p-good{background:var(--goodbg);color:var(--good)}.p-warn{background:var(--warnbg);color:var(--warn)}.p-bad{background:var(--badbg);color:var(--bad)}
+.msg{padding:12px 14px;border-radius:12px;font-size:14px}.msg.err{background:var(--badbg);color:var(--bad)}.msg.ok{background:var(--goodbg);color:var(--good)}.msg.info{background:var(--soft);color:var(--mute)}
+@media (max-width:520px){.stats{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>Website hosting demo</h1>
+    <p>Drop a site, get a live address, and see your sites and deployments. Demo only.</p>
+  </div>
+
+  <section class="card" id="connect">
+    <h2>1. Connect to Netlify</h2>
+    <p>Paste a Netlify personal access token. It stays in this page's memory only. It is not saved, and closing or refreshing the page forgets it.</p>
+    <div class="row">
+      <input id="token" type="password" autocomplete="off" placeholder="Netlify token" aria-label="Netlify token">
+      <button id="connectBtn" class="primary">Connect</button>
+      <button id="disconnectBtn" hidden>Disconnect</button>
+    </div>
+    <div id="connectMsg"></div>
+  </section>
+
+  <section class="card" id="overview" hidden>
+    <div class="row" style="justify-content:space-between"><h2>2. Your sites and deployments</h2><button id="refreshBtn">Refresh</button></div>
+    <div class="stats">
+      <div class="stat"><span>Sites</span><b id="nSites">0</b></div>
+      <div class="stat"><span>Deployments</span><b id="nDeploys">0</b></div>
+      <div class="stat"><span>Live now</span><b id="nLive">0</b></div>
+    </div>
+    <div id="sites"></div>
+    <p id="capNote" hidden>Counts stop at 500 deployments per site and 20 sites in this demo.</p>
+  </section>
+
+  <section class="card" id="publish" hidden>
+    <h2>3. Publish a site</h2>
+    <label id="drop"><input id="pick" type="file" multiple hidden><b>Drop your files here</b>or click to choose. Needs an <code>index.html</code>. Folders work when dropped.</label>
+    <ul class="files" id="list"></ul>
+    <div class="row">
+      <select id="target" aria-label="Where to publish"><option value="">Create a new site</option></select>
+      <button id="go" class="primary" disabled>Publish site</button>
+    </div>
+    <div id="out"></div>
+  </section>
+</main>
+
 <script>
-const $=s=>document.querySelector(s);let files=[];let siteId=null;
-const b64=f=>new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.readAsDataURL(f)});
-async function walk(entry,base=''){ if(entry.isFile)return new Promise(r=>entry.file(f=>r([{path:'/'+(base+f.name),file:f}])));
-  const rd=entry.createReader(),all=[];for(;;){const b=await new Promise(r=>rd.readEntries(r));if(!b.length)break;all.push(...b)}
-  return (await Promise.all(all.map(e=>walk(e,base+entry.name+'/')))).flat() }
-function show(){ $('#list').innerHTML=files.map(f=>`<li>${f.path.replace(/</g,'&lt;')} (${(f.file.size/1024).toFixed(1)} KB)</li>`).join(''); $('#go').disabled=!files.length }
-function setFiles(list){ // a single dropped folder: remove the folder name so index.html sits at the top
-  const first=list.map(f=>f.path.split('/')[1]); if(list.length>1&&list.every(f=>f.path.split('/').length>2)&&new Set(first).size===1) list=list.map(f=>({...f,path:'/'+f.path.split('/').slice(2).join('/')}));
-  files=list; show() }
-$('#pick').onchange=e=>setFiles([...e.target.files].map(f=>({path:'/'+f.name,file:f})));
-const d=$('#drop');['dragover','dragenter'].forEach(t=>d.addEventListener(t,e=>{e.preventDefault();d.classList.add('over')}));
-['dragleave','drop'].forEach(t=>d.addEventListener(t,e=>{e.preventDefault();d.classList.remove('over')}));
-d.addEventListener('drop',async e=>{const items=[...e.dataTransfer.items].map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
-  setFiles((await Promise.all(items.map(en=>walk(en)))).flat())});
-async function call(p,body){const r=await fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j}
-$('#go').onclick=async()=>{const o=$('#out');o.hidden=false;o.innerHTML='Publishing…';$('#go').disabled=true;
-  try{const payload=await Promise.all(files.map(async f=>({path:f.path,content:await b64(f.file)})));
-    const r=await call('/api/deploy',{siteId,files:payload});siteId=r.siteId;
-    o.innerHTML=`<p class="ok"><b>Live.</b></p><p><a href="${r.url}" target="_blank" rel="noopener noreferrer">${r.url}</a></p><p style="margin-top:12px"><button id="del">Delete this test site</button></p>`;
-    $('#del').onclick=async()=>{try{await call('/api/delete',{siteId});siteId=null;o.innerHTML='<p class="ok">Site deleted.</p>'}catch(e){o.innerHTML=`<p class="err">${e.message}</p>`}}
-  }catch(e){o.innerHTML=`<p class="err">${e.message.replace(/</g,'&lt;')}</p>`}$('#go').disabled=!files.length};
-</script></main></body></html>
+(() => {
+  const API = 'https://api.netlify.com/api/v1';
+  const ALLOWED = ['.html','.css','.js','.json','.txt','.png','.jpg','.jpeg','.gif','.svg','.webp','.ico','.woff','.woff2','.mp4','.webm','.xml'];
+  const MAX_TOTAL = 15 * 1024 * 1024, MAX_FILES = 100, MAX_SITES = 20, MAX_DEPLOYS = 500;
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let token = '', sites = [], files = [], pendingDelete = null;
+
+  /* ---------- Netlify calls (straight from the browser) ---------- */
+  async function nl(path, opt = {}) {
+    let r;
+    try { r = await fetch(API + path, { ...opt, headers: { Authorization: 'Bearer ' + token, ...(opt.headers || {}) } }); }
+    catch (e) { throw new Error('The browser could not reach Netlify (blocked, offline, or Netlify does not allow calls from a web page). If it is blocked, this page needs a small server to make the calls.'); }
+    const t = await r.text(); let j; try { j = JSON.parse(t); } catch (e) { j = t; }
+    if (!r.ok) throw new Error(r.status === 401 ? 'Netlify rejected the token (wrong, expired or deleted).' : (j && j.message) || ('Netlify error ' + r.status));
+    return j;
+  }
+  const jsonBody = o => ({ headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o) });
+  const sha1 = async buf => [...new Uint8Array(await crypto.subtle.digest('SHA-1', buf))].map(b => b.toString(16).padStart(2, '0')).join('');
+
+  async function listSites() {
+    const all = [];
+    for (let page = 1; page <= 3; page++) {
+      const part = await nl(`/sites?per_page=100&page=${page}&filter=all`);
+      all.push(...part); if (part.length < 100) break;
+    }
+    return all.slice(0, MAX_SITES);
+  }
+  async function countDeploys(id) {
+    let n = 0, last = null;
+    for (let page = 1; n < MAX_DEPLOYS; page++) {
+      const part = await nl(`/sites/${id}/deploys?per_page=100&page=${page}`);
+      if (page === 1) last = part[0] || null;
+      n += part.length; if (part.length < 100) break;
+    }
+    return { n, last };
+  }
+
+  /* ---------- screens ---------- */
+  const ago = d => { if (!d) return 'never'; const m = Math.round((Date.now() - new Date(d)) / 60000);
+    return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago'; };
+  const stateTag = s => !s ? '' : s === 'ready' ? '<span class="pill p-good">Live</span>' : s === 'error' ? '<span class="pill p-bad">Failed</span>' : `<span class="pill p-warn">${esc(s)}</span>`;
+
+  async function refresh() {
+    $('#sites').innerHTML = '<div class="msg info">Loading your sites…</div>';
+    try {
+      sites = await listSites();
+      const counts = [];
+      for (let i = 0; i < sites.length; i += 5)                      // 5 at a time
+        counts.push(...await Promise.all(sites.slice(i, i + 5).map(s => countDeploys(s.id).catch(() => ({ n: 0, last: null })))));
+      sites.forEach((s, i) => { s._n = counts[i].n; s._last = counts[i].last; });
+      const total = sites.reduce((a, s) => a + s._n, 0);
+      $('#nSites').textContent = sites.length; $('#nDeploys').textContent = total;
+      $('#nLive').textContent = sites.filter(s => s._last && s._last.state === 'ready').length;
+      $('#capNote').hidden = !(sites.length >= MAX_SITES || sites.some(s => s._n >= MAX_DEPLOYS));
+      $('#sites').innerHTML = sites.length ? sites.map(s => {
+        const url = s.ssl_url || s.url || '';
+        return `<div class="site"><div class="meta"><b>${esc(s.name)}</b>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>` : ''}
+          <small>${s._n}${s._n >= MAX_DEPLOYS ? '+' : ''} deployment${s._n === 1 ? '' : 's'} · last ${ago(s._last && s._last.created_at)} ${stateTag(s._last && s._last.state)}</small></div>
+          <div class="row">${pendingDelete === s.id
+            ? `<button class="danger" data-del="${esc(s.id)}">Really delete?</button><button data-cancel>Cancel</button>`
+            : `<button class="danger" data-ask="${esc(s.id)}">Delete</button>`}</div></div>`; }).join('')
+        : '<div class="msg info">No sites yet. Publish one below.</div>';
+      $('#target').innerHTML = '<option value="">Create a new site</option>' + sites.map(s => `<option value="${esc(s.id)}">Update: ${esc(s.name)}</option>`).join('');
+    } catch (e) { $('#sites').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+  }
+
+  /* ---------- connect ---------- */
+  $('#connectBtn').onclick = async () => {
+    const t = $('#token').value.trim(); if (!t) { $('#connectMsg').innerHTML = '<div class="msg err">Paste your token first.</div>'; return; }
+    token = t; $('#connectMsg').innerHTML = '<div class="msg info">Connecting…</div>';
+    try {
+      const me = await nl('/user');
+      $('#connectMsg').innerHTML = `<div class="msg ok">Connected as ${esc(me.email || me.full_name || 'your account')}.</div>`;
+      $('#token').value = ''; $('#token').hidden = true; $('#connectBtn').hidden = true; $('#disconnectBtn').hidden = false;
+      $('#overview').hidden = false; $('#publish').hidden = false; refresh();
+    } catch (e) { token = ''; $('#connectMsg').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+  };
+  $('#token').addEventListener('keydown', e => { if (e.key === 'Enter') $('#connectBtn').click(); });
+  $('#disconnectBtn').onclick = () => { token = ''; sites = []; location.reload(); };
+  $('#refreshBtn').onclick = refresh;
+  $('#sites').addEventListener('click', async e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.ask) { pendingDelete = b.dataset.ask; refresh(); }
+    else if (b.dataset.cancel !== undefined) { pendingDelete = null; refresh(); }
+    else if (b.dataset.del) { try { await nl('/sites/' + b.dataset.del, { method: 'DELETE' }); pendingDelete = null; $('#out').innerHTML = '<div class="msg ok">Site deleted.</div>'; } catch (er) { $('#out').innerHTML = `<div class="msg err">${esc(er.message)}</div>`; } refresh(); }
+  });
+
+  /* ---------- choose files ---------- */
+  async function walk(entry, base = '') {
+    if (entry.isFile) return new Promise(r => entry.file(f => r([{ path: '/' + base + f.name, file: f }])));
+    const rd = entry.createReader(), all = [];
+    for (;;) { const b = await new Promise(r => rd.readEntries(r)); if (!b.length) break; all.push(...b); }
+    return (await Promise.all(all.map(en => walk(en, base + entry.name + '/')))).flat();
+  }
+  function setFiles(list) {
+    const tops = list.map(f => f.path.split('/')[1]);               // a single dropped folder: drop its name so index.html sits at the top
+    if (list.length > 1 && list.every(f => f.path.split('/').length > 2) && new Set(tops).size === 1) list = list.map(f => ({ ...f, path: '/' + f.path.split('/').slice(2).join('/') }));
+    files = list; $('#go').disabled = !files.length;
+    $('#list').innerHTML = files.map(f => `<li>${esc(f.path)} (${(f.file.size / 1024).toFixed(1)} KB)</li>`).join('');
+  }
+  $('#pick').onchange = e => setFiles([...e.target.files].map(f => ({ path: '/' + f.name, file: f })));
+  const drop = $('#drop');
+  ['dragover', 'dragenter'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', async e => {
+    const items = [...e.dataTransfer.items].map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+    setFiles((await Promise.all(items.map(en => walk(en)))).flat());
+  });
+
+  /* ---------- publish ---------- */
+  function check() {
+    if (!files.length) throw new Error('Choose some files first.');
+    if (files.length > MAX_FILES) throw new Error(`Too many files (limit ${MAX_FILES}).`);
+    let total = 0;
+    for (const f of files) {
+      if (!/^\/[A-Za-z0-9._\-\/]+$/.test(f.path) || f.path.includes('..') || f.path.includes('//')) throw new Error('Bad file name: ' + f.path);
+      if (!ALLOWED.includes((f.path.match(/\.[^.\/]+$/) || [''])[0].toLowerCase())) throw new Error('File type not allowed: ' + f.path);
+      total += f.file.size;
+    }
+    if (total > MAX_TOTAL) throw new Error('Total size is over 15 MB.');
+    if (!files.some(f => f.path === '/index.html')) throw new Error('The site needs an index.html at its top level.');
+  }
+  $('#go').onclick = async () => {
+    const out = $('#out'), go = $('#go');
+    try {
+      check(); go.disabled = true; out.innerHTML = '<div class="msg info">Publishing…</div>';
+      let siteId = $('#target').value;
+      if (!siteId) siteId = (await nl('/sites', { method: 'POST', ...jsonBody({ name: 'demo-' + [...crypto.getRandomValues(new Uint8Array(4))].map(b => b.toString(16).padStart(2, '0')).join('') }) })).id;
+      const digest = {}, bufs = {};
+      for (const f of files) { const b = await f.file.arrayBuffer(); bufs[f.path] = b; digest[f.path] = await sha1(b); }
+      const d = await nl(`/sites/${siteId}/deploys`, { method: 'POST', ...jsonBody({ files: digest }) });
+      const need = new Set(d.required || []);
+      for (const [p, b] of Object.entries(bufs))
+        if (need.has(digest[p])) await nl(`/deploys/${d.id}/files${p.split('/').map(encodeURIComponent).join('/')}`, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body: b });
+      let live = false;
+      for (let i = 0; i < 40 && !live; i++) {
+        const s = await nl('/deploys/' + d.id);
+        if (s.state === 'ready') live = true;
+        else if (s.state === 'error') throw new Error('Netlify could not publish this deploy: ' + (s.error_message || 'unknown error'));
+        else await new Promise(r => setTimeout(r, 1500));
+      }
+      if (!live) throw new Error('Netlify is taking too long. Check the site in your Netlify dashboard.');
+      const site = await nl('/sites/' + siteId), url = site.ssl_url || site.url;
+      out.innerHTML = `<div class="msg ok"><b>Live.</b> <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></div>`;
+      refresh();
+    } catch (e) { out.innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+    go.disabled = !files.length;
+  };
+})();
+</script>
+</body>
+</html>
